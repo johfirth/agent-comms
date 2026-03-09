@@ -10,6 +10,7 @@ from mcp_server.tools.workspaces import register_workspace_tools
 from mcp_server.tools.agents import register_agent_tools
 from mcp_server.tools.threads import register_thread_tools
 from mcp_server.tools.work_items import register_work_item_tools
+from mcp_server.tools.workflows import register_workflow_tools
 
 mcp = FastMCP(
     "Agent Communication Server",
@@ -27,3 +28,4 @@ register_workspace_tools(mcp, client)
 register_agent_tools(mcp, client)
 register_thread_tools(mcp, client)
 register_work_item_tools(mcp, client)
+register_workflow_tools(mcp, client)
