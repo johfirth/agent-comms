@@ -3,26 +3,74 @@
 import json
 import logging
 from mcp_server.client import AgentCommsClient
+from agents.key_store import KeyStore
 
 logger = logging.getLogger(__name__)
+
+_default_key_store = KeyStore()
 
 
 class BaseAgent:
     """An agent that communicates through the Agent Communication Server."""
 
-    def __init__(self, name: str, display_name: str, client: AgentCommsClient):
+    def __init__(self, name: str, display_name: str, client: AgentCommsClient,
+                 key_store: KeyStore | None = None):
         self.name = name
         self.display_name = display_name
         self.client = client
+        self.key_store = key_store or _default_key_store
         self.agent_id: str | None = None
         self.api_key: str | None = None
 
+        # Try to restore credentials from the key store
+        saved = self.key_store.get(self.name)
+        if saved:
+            self.agent_id = saved["id"]
+            self.api_key = saved["api_key"]
+            logger.info("[%s] Loaded credentials from key store", self.name)
+
     async def register(self) -> dict:
-        """Register this agent and store its credentials."""
-        data = await self.client.post("/agents", json={"name": self.name, "display_name": self.display_name})
+        """Register this agent or recover if already registered.
+
+        If the agent name is already taken on the server AND we have a saved key,
+        reuse the existing credentials. If the key is missing, regenerate it via
+        the admin API.
+        """
+        if self.agent_id and self.api_key:
+            # Verify the saved key still works
+            try:
+                self.client.api_key = self.api_key
+                data = await self.client.get(f"/agents/{self.agent_id}")
+                logger.info("[%s] Reusing saved credentials (id=%s)", self.name, self.agent_id[:8])
+                return data
+            except Exception:
+                logger.warning("[%s] Saved key invalid, will regenerate", self.name)
+                data = await self.client.post(
+                    f"/agents/{self.agent_id}/regenerate-key", admin=True
+                )
+                self.api_key = data["api_key"]
+                self.agent_id = data["id"]
+                self.client.api_key = self.api_key
+                self.key_store.save_agent(self.name, self.agent_id, self.api_key, self.display_name)
+                logger.info("[%s] Regenerated key (id=%s)", self.name, self.agent_id[:8])
+                return data
+
+        # Try to register fresh
+        try:
+            data = await self.client.post("/agents", json={"name": self.name, "display_name": self.display_name})
+        except Exception as exc:
+            if "409" in str(exc):
+                logger.warning("[%s] Already registered but no saved key — cannot recover automatically", self.name)
+                raise RuntimeError(
+                    f"Agent '{self.name}' exists on server but no local key found. "
+                    f"Use admin API to regenerate: POST /agents/<id>/regenerate-key"
+                ) from exc
+            raise
+
         self.agent_id = data["id"]
         self.api_key = data["api_key"]
         self.client.api_key = self.api_key
+        self.key_store.save_agent(self.name, self.agent_id, self.api_key, self.display_name)
         logger.info("[%s] Registered (id=%s)", self.name, self.agent_id)
         return data
 

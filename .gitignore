@@ -31,3 +31,6 @@ __pycache__/
 # Temporary files
 tmp/
 temp/
+
+# Agent key store (contains secrets)
+agents/keys.json

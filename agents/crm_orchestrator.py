@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastmcp import Client
 from mcp_server.server import mcp as mcp_server
 from mcp_server.server import client as http_client
+from agents.mcp_helpers import extract_result, register_or_recover
 
 logging.basicConfig(
     level=logging.INFO,
@@ -269,17 +270,6 @@ CONVERSATION = [
 ]
 
 
-def extract_result(result) -> dict | list | str:
-    """Extract usable data from a FastMCP CallToolResult."""
-    if hasattr(result, "content") and result.content:
-        text = result.content[0].text
-        try:
-            return json.loads(text)
-        except (json.JSONDecodeError, TypeError):
-            return text
-    return str(result)
-
-
 async def main():
     base_url = os.environ.get("AGENT_COMMS_URL", "http://localhost:8000")
 
@@ -307,14 +297,7 @@ async def main():
         print("\n[Setup] Registering agents via MCP...")
 
         for role, agent in agents.items():
-            result = await mcp_client.call_tool(
-                "register_agent",
-                {"name": agent["name"], "display_name": agent["display_name"]},
-            )
-            data = extract_result(result)
-            agent["id"] = data["id"]
-            agent["api_key"] = data["api_key"]
-            logger.info("Registered %s (id=%s)", agent["display_name"], agent["id"][:8])
+            await register_or_recover(mcp_client, http_client, agent)
 
         # Create workspace (admin)
         http_client.api_key = agents["architect"]["api_key"]

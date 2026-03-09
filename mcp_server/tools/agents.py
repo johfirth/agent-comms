@@ -53,3 +53,14 @@ def register_agent_tools(mcp: FastMCP, client: AgentCommsClient):
         if workspace_id:
             params["workspace_id"] = workspace_id
         return await client.get("/mentions", params=params)
+
+    @mcp.tool()
+    async def regenerate_agent_key(
+        agent_id: Annotated[str, "UUID of the agent whose key to regenerate"],
+    ) -> dict:
+        """Regenerate an agent's API key. Requires admin privileges.
+
+        Returns the agent profile with the new API key (shown only once).
+        Use this if an agent's key was lost or compromised.
+        """
+        return await client.post(f"/agents/{agent_id}/regenerate-key", admin=True)
