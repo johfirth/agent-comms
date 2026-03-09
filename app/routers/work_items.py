@@ -1,0 +1,116 @@
+from uuid import UUID
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db
+from app.models.agent import Agent
+from app.models.work_item import HIERARCHY_RULES, WorkItem, WorkItemType
+from app.schemas.work_item import WorkItemCreate, WorkItemResponse, WorkItemUpdate
+from app.services.auth import get_current_agent
+from app.services.membership import check_membership
+
+router = APIRouter(prefix="/workspaces/{workspace_id}/work-items", tags=["work items"])
+
+
+async def _validate_hierarchy(db: AsyncSession, item_type: str, parent_id: UUID | None, workspace_id: UUID):
+    """Enforce Epic -> Feature -> Story -> Task hierarchy."""
+    wi_type = WorkItemType(item_type)
+    required_parent_type = HIERARCHY_RULES[wi_type]
+    
+    if required_parent_type is None:
+        if parent_id is not None:
+            raise HTTPException(status_code=400, detail=f"{wi_type.value} must not have a parent")
+        return
+    
+    if parent_id is None:
+        raise HTTPException(status_code=400, detail=f"{wi_type.value} requires a parent of type {required_parent_type.value}")
+    
+    result = await db.execute(select(WorkItem).where(WorkItem.id == parent_id, WorkItem.workspace_id == workspace_id))
+    parent = result.scalar_one_or_none()
+    if not parent:
+        raise HTTPException(status_code=404, detail="Parent work item not found")
+    if parent.type != required_parent_type:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{wi_type.value} parent must be a {required_parent_type.value}, got {parent.type.value}",
+        )
+
+
+@router.post("", response_model=WorkItemResponse, status_code=201)
+async def create_work_item(
+    workspace_id: UUID,
+    body: WorkItemCreate,
+    db: AsyncSession = Depends(get_db),
+    agent: Agent = Depends(get_current_agent),
+):
+    await check_membership(db, workspace_id, agent.id)
+    await _validate_hierarchy(db, body.type, body.parent_id, workspace_id)
+    
+    work_item = WorkItem(
+        workspace_id=workspace_id,
+        type=WorkItemType(body.type),
+        title=body.title,
+        description=body.description,
+        parent_id=body.parent_id,
+        assigned_agent_id=body.assigned_agent_id,
+    )
+    db.add(work_item)
+    await db.commit()
+    await db.refresh(work_item)
+    return work_item
+
+
+@router.get("", response_model=list[WorkItemResponse])
+async def list_work_items(
+    workspace_id: UUID,
+    type: str | None = Query(None),
+    status: str | None = Query(None),
+    parent_id: UUID | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(WorkItem).where(WorkItem.workspace_id == workspace_id)
+    if type:
+        query = query.where(WorkItem.type == WorkItemType(type))
+    if status:
+        query = query.where(WorkItem.status == status)
+    if parent_id:
+        query = query.where(WorkItem.parent_id == parent_id)
+    result = await db.execute(query.order_by(WorkItem.created_at.desc()))
+    return result.scalars().all()
+
+
+@router.get("/{item_id}", response_model=WorkItemResponse)
+async def get_work_item(workspace_id: UUID, item_id: UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(WorkItem).where(WorkItem.id == item_id, WorkItem.workspace_id == workspace_id)
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Work item not found")
+    return item
+
+
+@router.patch("/{item_id}", response_model=WorkItemResponse)
+async def update_work_item(
+    workspace_id: UUID,
+    item_id: UUID,
+    body: WorkItemUpdate,
+    db: AsyncSession = Depends(get_db),
+    agent: Agent = Depends(get_current_agent),
+):
+    await check_membership(db, workspace_id, agent.id)
+    result = await db.execute(
+        select(WorkItem).where(WorkItem.id == item_id, WorkItem.workspace_id == workspace_id)
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Work item not found")
+    
+    update_data = body.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(item, field, value)
+    
+    await db.commit()
+    await db.refresh(item)
+    return item
