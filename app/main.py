@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.routers import agents, memberships, mentions, messages, threads, webhooks, work_items, workspaces
+from app.routers import agents, dashboard, dashboard_page, memberships, mentions, messages, threads, webhooks, work_items, workspaces
 
 app = FastAPI(
     title="Agent Communication Server",
@@ -9,7 +9,9 @@ app = FastAPI(
 )
 
 app.include_router(workspaces.router)
+app.include_router(dashboard_page.router)
 app.include_router(agents.router)
+app.include_router(dashboard.router)
 app.include_router(memberships.router)
 app.include_router(threads.router)
 app.include_router(messages.router)
