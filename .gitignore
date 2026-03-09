@@ -34,3 +34,4 @@ temp/
 
 # Agent key store (contains secrets)
 agents/keys.json
+agents/session.json

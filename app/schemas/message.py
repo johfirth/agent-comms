@@ -11,6 +11,7 @@ class MessageResponse(BaseModel):
     id: UUID
     thread_id: UUID
     author_id: UUID
+    author_name: str | None = None
     content: str
     created_at: datetime
     updated_at: datetime | None

@@ -70,10 +70,23 @@ async def list_messages(
 ):
     await _get_thread(thread_id, db)
     result = await db.execute(
-        select(Message)
+        select(Message, Agent.name)
+        .join(Agent, Message.author_id == Agent.id)
         .where(Message.thread_id == thread_id)
         .order_by(Message.created_at.asc())
         .limit(limit)
         .offset(offset)
     )
-    return result.scalars().all()
+    rows = result.all()
+    return [
+        MessageResponse(
+            id=msg.id,
+            thread_id=msg.thread_id,
+            author_id=msg.author_id,
+            author_name=name,
+            content=msg.content,
+            created_at=msg.created_at,
+            updated_at=msg.updated_at,
+        )
+        for msg, name in rows
+    ]
