@@ -4,8 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, minimum-scale=1, initial-scale=1">
   <title>Agent Comms Dashboard</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -750,9 +751,9 @@
       <h1>Agent Comms Dashboard</h1>
     </div>
     <div style="display:flex; align-items:center; gap:20px;">
-      <div class="refresh-indicator">
-        <span class="refresh-dot"></span>
-        <span>Live — auto-refresh 15s</span>
+      <div class="refresh-indicator" id="status-indicator">
+        <span class="refresh-dot" id="status-dot"></span>
+        <span id="status-text">Connecting…</span>
       </div>
       <div class="workspace-selector">
         <label for="ws-select">Workspace</label>
@@ -900,6 +901,23 @@
   }
 
   // --- Fetch helpers ---
+  let apiOk = false;
+
+  function setStatus(ok, text) {
+    const dot = $('status-dot');
+    const label = $('status-text');
+    if (ok) {
+      dot.style.background = 'var(--green)';
+      dot.style.boxShadow = '0 0 8px rgba(34,197,94,0.5)';
+      label.textContent = text || 'Live — auto-refresh 15s';
+    } else {
+      dot.style.background = 'var(--red)';
+      dot.style.boxShadow = '0 0 8px rgba(239,68,68,0.5)';
+      label.textContent = text || 'Disconnected';
+    }
+    apiOk = ok;
+  }
+
   async function api(path) {
     try {
       const r = await fetch(path);
@@ -1129,7 +1147,11 @@
   // --- Data fetching ---
   async function fetchOverview() {
     overview = await api('/api/dashboard/overview');
-    if (!overview) return;
+    if (!overview) {
+      setStatus(false, 'API unreachable');
+      return;
+    }
+    setStatus(true);
 
     const prevValue = wsSelect.value;
     wsSelect.innerHTML = '<option value="__all__">All Workspaces</option>';
@@ -1177,7 +1199,17 @@
   }
 
   async function fetchAndRender() {
-    if (!overview || !overview.workspaces || !overview.workspaces.length) {
+    if (!overview) {
+      const errHtml = '<div class="empty-state"><div class="empty-state-title">⚠️ Cannot reach server</div><div class="empty-state-hint">The API is not responding. Check that the server is running at <code>' + location.origin + '</code></div></div>';
+      $('messages-body').innerHTML = errHtml;
+      $('threads-body').innerHTML = errHtml;
+      $('workitems-body').innerHTML = errHtml;
+      $('mentions-body').innerHTML = '<div class="empty-state" style="width:100%"><div class="empty-state-title">⚠️ Cannot reach server</div></div>';
+      isFirstLoad = false;
+      return;
+    }
+
+    if (!overview.workspaces || !overview.workspaces.length) {
       renderEmptyWorkspacesState();
       isFirstLoad = false;
       return;
@@ -1247,6 +1279,14 @@
     await fetchOverview();
     await fetchAndRender();
     startAutoRefresh();
+
+    // If first load failed, retry sooner
+    if (!overview) {
+      setTimeout(async () => {
+        await fetchOverview();
+        await fetchAndRender();
+      }, 3000);
+    }
   }
 
   init();

@@ -6,7 +6,6 @@
       "cwd": "C:\\Users\\johnfirth\\vibe-code\\agent-comms",
       "env": {
         "AGENT_COMMS_URL": "http://localhost:8000",
-        "AGENT_COMMS_API_KEY": "<your-agent-api-key>",
         "AGENT_COMMS_ADMIN_KEY": "admin-dev-key-change-me"
       }
     }
