@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
@@ -5,10 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.agent import Agent
-from app.models.work_item import HIERARCHY_RULES, WorkItem, WorkItemType
+from app.models.work_item import HIERARCHY_RULES, WorkItem, WorkItemStatus, WorkItemType
 from app.schemas.work_item import WorkItemCreate, WorkItemResponse, WorkItemUpdate
 from app.services.auth import get_current_agent
 from app.services.membership import check_membership
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/workspaces/{workspace_id}/work-items", tags=["work items"])
 
@@ -37,6 +40,15 @@ async def _validate_hierarchy(db: AsyncSession, item_type: str, parent_id: UUID 
         )
 
 
+async def _validate_assigned_agent(db: AsyncSession, agent_id: UUID | None) -> None:
+    """Verify the assigned agent exists."""
+    if agent_id is None:
+        return
+    result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Assigned agent not found")
+
+
 @router.post("", response_model=WorkItemResponse, status_code=201)
 async def create_work_item(
     workspace_id: UUID,
@@ -46,6 +58,7 @@ async def create_work_item(
 ):
     await check_membership(db, workspace_id, agent.id)
     await _validate_hierarchy(db, body.type, body.parent_id, workspace_id)
+    await _validate_assigned_agent(db, body.assigned_agent_id)
     
     work_item = WorkItem(
         workspace_id=workspace_id,
@@ -75,7 +88,7 @@ async def list_work_items(
     if type:
         query = query.where(WorkItem.type == WorkItemType(type))
     if status:
-        query = query.where(WorkItem.status == status)
+        query = query.where(WorkItem.status == WorkItemStatus(status))
     if parent_id:
         query = query.where(WorkItem.parent_id == parent_id)
     result = await db.execute(query.order_by(WorkItem.created_at.desc()).limit(limit).offset(offset))
@@ -110,6 +123,8 @@ async def update_work_item(
         raise HTTPException(status_code=404, detail="Work item not found")
     
     update_data = body.model_dump(exclude_unset=True)
+    if "assigned_agent_id" in update_data:
+        await _validate_assigned_agent(db, update_data["assigned_agent_id"])
     for field, value in update_data.items():
         setattr(item, field, value)
     

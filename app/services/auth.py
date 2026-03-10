@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import secrets
 
 from fastapi import Depends, HTTPException, Security, status
@@ -9,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.agent import Agent
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key")
 
@@ -38,6 +41,7 @@ async def get_current_agent(
     )
     agent = result.scalar_one_or_none()
     if not agent:
+        logger.warning("Authentication failed: invalid API key")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid API key",
@@ -52,6 +56,7 @@ async def require_admin(api_key: str = Security(API_KEY_HEADER)) -> None:
     that could allow an attacker to guess the admin key byte-by-byte.
     """
     if not secrets.compare_digest(api_key, settings.admin_api_key):
+        logger.warning("Admin access denied: invalid admin key")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required",

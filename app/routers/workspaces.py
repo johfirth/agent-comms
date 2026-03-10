@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
@@ -8,6 +9,8 @@ from app.models.workspace import Workspace
 from app.schemas.workspace import WorkspaceCreate, WorkspaceResponse
 from app.services.auth import require_admin
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
 
@@ -15,10 +18,15 @@ router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 async def create_workspace(
     body: WorkspaceCreate, db: AsyncSession = Depends(get_db), _admin=Depends(require_admin)
 ):
+    existing = await db.execute(select(Workspace).where(Workspace.name == body.name))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Workspace name already taken")
+
     workspace = Workspace(name=body.name, description=body.description)
     db.add(workspace)
     await db.commit()
     await db.refresh(workspace)
+    logger.info("Workspace created: %s (id=%s)", workspace.name, workspace.id)
     return workspace
 
 

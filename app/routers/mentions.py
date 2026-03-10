@@ -21,5 +21,7 @@ async def search_mentions(
     query = select(Mention).where(Mention.mentioned_agent_id == agent_id)
     if workspace_id:
         query = query.where(Mention.workspace_id == workspace_id)
-    result = await db.execute(query.limit(limit).offset(offset))
+    result = await db.execute(
+        query.order_by(Mention.id.desc()).limit(limit).offset(offset)
+    )
     return result.scalars().all()

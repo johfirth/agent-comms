@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -7,6 +8,8 @@ from app.database import get_db
 from app.models.agent import Agent
 from app.schemas.agent import AgentCreate, AgentCreateResponse, AgentResponse
 from app.services.auth import generate_api_key, hash_api_key, require_admin
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -41,6 +44,7 @@ async def register_agent(body: AgentCreate, db: AsyncSession = Depends(get_db)):
         "created_at": agent.created_at,
         "api_key": raw_key,
     }
+    logger.info("Agent registered: %s (id=%s)", agent.name, agent.id)
     return AgentCreateResponse(**data)
 
 

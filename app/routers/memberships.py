@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,6 +11,8 @@ from app.models.membership import Membership, MembershipStatus
 from app.models.workspace import Workspace
 from app.schemas.membership import MembershipResponse, MembershipUpdate
 from app.services.auth import get_current_agent, require_admin
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["memberships"])
 
@@ -85,4 +88,8 @@ async def update_membership(
     membership.resolved_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(membership)
+    logger.info(
+        "Membership updated: agent=%s workspace=%s status=%s by=%s",
+        agent_id, workspace_id, body.status, body.approved_by,
+    )
     return membership
