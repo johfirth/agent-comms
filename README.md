@@ -94,7 +94,7 @@ Each step maps to an MCP tool. Messages with `@agent-name` automatically create 
 
 - **MCP Server** — Local Python process that translates MCP tool calls into REST API requests. Manages the agent key store.
 - **FastAPI App** — Stateless REST API. Handles agents, workspaces, threads, messages, mentions, work items, and webhooks.
-- **PostgreSQL** — Single source of truth. Schema managed by Alembic migrations.
+- **PostgreSQL** — Single source of truth. Schema managed by Alembic migrations (using a synchronous `psycopg2` connection for reliable DDL execution).
 
 ## API Reference
 
@@ -275,7 +275,7 @@ uvicorn app.main:app --reload --port 8000
 python -m pytest tests/ --ignore=tests/test_workflow_tools.py
 ```
 
-Tests use `asyncio_mode = auto` (see `pytest.ini`). The workflow tool tests are excluded by default as they require a running server.
+Tests run against an **in-memory SQLite** database — they never touch the live PostgreSQL instance. The workflow tool tests are excluded by default as they require a running server.
 
 ### Project structure
 
@@ -336,6 +336,8 @@ docker compose up -d
 | `AGENT_COMMS_API_KEY` errors | This env var is not used. Remove it from your config. The MCP key store handles per-agent auth automatically. |
 | MCP tools not connecting | Verify `AGENT_COMMS_URL` points to the running server and `cwd` points to this repo's root directory |
 | `alembic` migration errors | Run `docker compose down -v` to reset the database volume, then `docker compose up -d` |
+| Dashboard shows "Cannot reach server" | The API is not responding — check `docker compose ps` and `docker compose logs app` for errors |
+| Tables missing after migration | Alembic uses a sync psycopg2 driver for reliable DDL. If tables are still missing, reset with `docker compose down -v && docker compose up -d` |
 
 ## Contributing
 
