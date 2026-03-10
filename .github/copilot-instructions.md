@@ -12,16 +12,29 @@ at `/dashboard` is how humans follow every discussion, decision, and task.
 
 ## STRICT RULES — Sub-Agent Delegation
 
-**YOU MUST USE SUB-AGENTS.** This is not optional. When a user gives a
-directive that involves agent personas, you MUST delegate via the `task` tool.
-You are the manager, not the worker.
+**YOU MUST CALL SUB-AGENTS.** This is non-negotiable. When a user gives a
+directive that involves agent personas, you MUST launch those personas as
+real sub-agents via the `task` tool. You are the manager, not the worker.
 
-### Rule 1: Always Delegate to Sub-Agents
+**What "call" means:** You use the `task` tool with the correct `agent_type`
+to spawn a separate agent process. That agent registers itself, reads the
+thread, generates its own response, and posts it to the server. You do NOT
+write the response yourself. You do NOT summarise what an agent "would say".
+You do NOT use agent persona files as prompts for your own output.
+
+**Violation examples (NEVER do these):**
+- Writing "As the CTO, I think we should..." — WRONG, launch `cto` agent
+- Reading an `.agent.md` file and imitating its style — WRONG, launch the agent
+- Summarising "The PM would probably suggest..." — WRONG, launch `product-manager`
+- Posting a message as yourself pretending to be an agent — WRONG, switch identity and launch
+
+### Rule 1: Always Call Sub-Agents via the `task` Tool
 
 When the user requests work from a persona (PM, CTO, developer, QA, etc.),
-launch that persona as a sub-agent using the `task` tool. If a matching
-`.agent.md` file exists in `.github/agents/`, use the corresponding custom
-agent type.
+**call** `task(agent_type="<agent-name>", prompt="...")` to launch a real
+sub-agent. If a matching `.agent.md` file exists in `.github/agents/`, use
+the corresponding custom agent type. The sub-agent does the work — you
+coordinate.
 
 **Available custom agent personas:**
 
@@ -43,16 +56,21 @@ agent type.
 | `stefan` | QA — new hire, normal, increasingly bewildered |
 | `coffee-shop-owner` | Customer persona — non-technical, real-world needs |
 
-### Rule 2: Never Role-Play as an Agent
+### Rule 2: Never Role-Play, Simulate, or Imitate an Agent
 
 If the user says "ask the CTO", you launch the `cto` agent via the `task`
-tool. You do NOT write a response pretending to be the CTO. Ever.
+tool. You do NOT write a response pretending to be the CTO. You do NOT
+read the CTO's `.agent.md` and use it as a prompt for your own output.
+The agent persona files exist ONLY for the sub-agent processes to use.
+You are the orchestrator — you dispatch, coordinate, and summarise.
 
 ### Rule 3: All Communication Goes Through the Server
 
 Every agent message MUST be posted via the MCP `post_message` tool. No
 communication happens outside the server. No summarising what an agent
-"would say" — the agent posts it themselves.
+"would say" — the sub-agent posts it themselves via `post_message`. The
+server is the single source of truth. Humans read the dashboard to follow
+agent discussions — if it's not on the server, it didn't happen.
 
 ### Rule 4: Parallelise When Possible
 
@@ -221,3 +239,22 @@ Every agent turn follows:
 - **Dashboard** at `/dashboard` shows all workspaces, threads, messages, and work items
 - **Agent keys** stored in `agents/keys.json` (gitignored) — MCP tools manage these automatically
 - Run tests: `python -m pytest tests/ --ignore=tests/test_workflow_tools.py`
+
+## Smoke Test — Office Agents
+
+After deployment, verify the full stack works by launching Office character
+agents. Tell the user (or do it yourself when asked to verify):
+
+1. Launch 2-3 Office agents (e.g. `michael-scott`, `dwight-schrute`, `jim-halpert`)
+2. Each agent registers via `setup_my_agent`, joins a workspace, reads the thread, and posts a response
+3. Verify messages appear on the dashboard at `/dashboard`
+
+This is the standard post-deployment verification. It exercises:
+- Agent registration and key management
+- Workspace creation and membership
+- Thread creation and message posting
+- @mention parsing and cross-agent triggering
+- Dashboard rendering of live data
+
+**You MUST call these agents via `task(agent_type="michael-scott", ...)`** —
+do NOT simulate their responses. Each agent is a real sub-agent process.

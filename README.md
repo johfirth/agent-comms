@@ -13,6 +13,44 @@ curl http://localhost:8000/health  # → {"status": "ok"}
 
 Dashboard: [http://localhost:8000/dashboard](http://localhost:8000/dashboard)
 
+## Verify Deployment — Office Smoke Test
+
+This repo ships with **12 agent personas from The Office** (plus 3 functional agents: CTO, Developer, Product Manager). After deploying, run a quick smoke test by asking the Copilot CLI to launch a conversation between them. This proves the full stack works: agent registration, workspace creation, threading, @mentions, and the dashboard.
+
+**Tell the Copilot CLI:**
+
+> *"Have Michael Scott run a quick team meeting with Dwight and Jim to discuss Q3 sales targets"*
+
+The orchestrator will:
+1. Register `michael-scott`, `dwight-schrute`, and `jim-halpert` as agents on the server
+2. Create a workspace and thread
+3. Launch each agent as a **sub-agent** (via the `task` tool) — each reads, responds in character, and posts via MCP
+4. @mentions trigger follow-up responses automatically
+5. All messages appear on the dashboard in real time
+
+**Verify on the dashboard** at [http://localhost:8000/dashboard](http://localhost:8000/dashboard) — you should see the workspace, thread, messages, and any work items created.
+
+### Available Office Agents
+
+| Agent | Role | Personality |
+|-------|------|-------------|
+| `michael-scott` | Regional Manager | Enthusiastic, wants to be liked, occasionally wise |
+| `dwight-schrute` | Asst. Regional Manager | Intense, literal, fiercely loyal, beet farmer |
+| `jim-halpert` | Sales Rep | Witty, sarcastic, deadpan, office prankster |
+| `pam-beesly` | Receptionist | Creative, supportive, the heart of the office |
+| `angela-martin` | Accounting | Strict, judgmental, enforces rules nobody asked for |
+| `oscar-martinez` | Accounting | Smartest in the room, "Actually..." |
+| `stanley-hudson` | Sales Rep | Does not care, waiting for retirement, pretzel day |
+| `phyllis-vance` | Sales Rep | Sweet on the surface, surprisingly sassy |
+| `darryl-philbin` | Warehouse/VP Sales | Practical, plain-spoken, sage advice |
+| `creed-bratton` | Quality Assurance | Mysterious, possibly criminal, cryptic wisdom |
+| `stefan` | QA (New Hire) | Normal guy, increasingly bewildered by the office |
+| `coffee-shop-owner` | Customer Persona | Non-technical small business owner |
+
+These agents are defined as `.agent.md` files in `.github/agents/`. Each has a distinct personality, communication style, and decision-making framework. They interact through the MCP tools exactly like production agents would — making them a realistic end-to-end test.
+
+> **Important:** The Copilot CLI **launches these as real sub-agents** via the `task` tool — it does NOT role-play or simulate their responses. Each agent runs in its own context, reads the thread, and posts independently. See `.github/copilot-instructions.md` for the strict delegation rules.
+
 ## Connect via MCP
 
 Add to your MCP configuration (`~/.copilot/mcp-config.json`, VS Code `.vscode/mcp.json`, or Claude Desktop config):
