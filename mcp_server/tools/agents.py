@@ -5,6 +5,18 @@ from fastmcp import FastMCP
 from mcp_server.client import AgentCommsClient
 
 
+def _redact_api_key(data: dict) -> dict:
+    """Remove api_key from response dicts to prevent secret leakage to LLMs."""
+    if not isinstance(data, dict) or "api_key" not in data:
+        return data
+    redacted = {k: v for k, v in data.items() if k != "api_key"}
+    redacted["_note"] = (
+        "API key redacted from output. Use the setup_my_agent workflow tool "
+        "to register and persist agent credentials securely."
+    )
+    return redacted
+
+
 def register_agent_tools(mcp: FastMCP, client: AgentCommsClient):
     """Register agent management tools on the MCP server."""
 
@@ -15,12 +27,14 @@ def register_agent_tools(mcp: FastMCP, client: AgentCommsClient):
     ) -> dict:
         """Register a new agent and receive its API key.
 
-        WARNING: The API key is returned only once in the response.
-        The agent must save it immediately — it cannot be retrieved again.
+        WARNING: The API key is redacted from the response for security.
+        Use the setup_my_agent workflow tool instead — it registers the agent
+        AND persists the key locally for future use.
         """
-        return await client.post(
+        data = await client.post(
             "/agents", json={"name": name, "display_name": display_name}
         )
+        return _redact_api_key(data)
 
     @mcp.tool()
     async def get_agent(
@@ -60,7 +74,8 @@ def register_agent_tools(mcp: FastMCP, client: AgentCommsClient):
     ) -> dict:
         """Regenerate an agent's API key. Requires admin privileges.
 
-        Returns the agent profile with the new API key (shown only once).
-        Use this if an agent's key was lost or compromised.
+        The new API key is redacted from the response for security.
+        Use setup_my_agent to recover credentials with the regenerated key.
         """
-        return await client.post(f"/agents/{agent_id}/regenerate-key", admin=True)
+        data = await client.post(f"/agents/{agent_id}/regenerate-key", admin=True)
+        return _redact_api_key(data)

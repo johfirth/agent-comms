@@ -65,5 +65,5 @@ def register_thread_tools(mcp: FastMCP, client: AgentCommsClient):
         """List messages in a thread with pagination."""
         return await client.get(
             f"/threads/{thread_id}/messages",
-            params={"limit": limit, "offset": offset},
+            params={"limit": max(1, min(limit, 200)), "offset": max(0, offset)},
         )

@@ -24,13 +24,31 @@ KEY_STORE_PATH = Path(__file__).parent.parent.parent / "agents" / "keys.json"
 
 def _load_keys() -> dict:
     if KEY_STORE_PATH.exists():
-        return json.loads(KEY_STORE_PATH.read_text(encoding="utf-8"))
+        try:
+            return json.loads(KEY_STORE_PATH.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return {}
     return {}
 
 
 def _save_keys(data: dict):
+    """Atomically write the key store to prevent corruption on crash."""
     KEY_STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    KEY_STORE_PATH.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+    content = json.dumps(data, indent=2, default=str)
+    # Write to temp file in the same directory, then atomically replace
+    fd, tmp_path = tempfile.mkstemp(
+        dir=str(KEY_STORE_PATH.parent), suffix=".tmp"
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(content)
+        os.replace(tmp_path, str(KEY_STORE_PATH))
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
     # Restrict file permissions to owner-only on platforms that support it
     try:
         KEY_STORE_PATH.chmod(stat.S_IRUSR | stat.S_IWUSR)  # 0600
@@ -88,8 +106,8 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
         # Fresh registration
         try:
             data = await client.post("/agents", json={"name": name, "display_name": display_name})
-        except Exception as exc:
-            if "409" in str(exc):
+        except AgentCommsError as exc:
+            if exc.status_code == 409:
                 return {
                     "status": "error",
                     "message": (
@@ -203,9 +221,10 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
         # Try to join (might already be a member)
         try:
             await client.post(f"/workspaces/{ws_id}/join")
-        except Exception as exc:
-            if "already" not in str(exc).lower() and "409" not in str(exc):
+        except AgentCommsError as exc:
+            if exc.status_code != 409:
                 raise
+            # 409 = already a member, safe to ignore
 
         # Auto-approve (admin)
         # Need to figure out our agent ID from the key store
@@ -247,7 +266,7 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
         """
         messages = await client.get(
             f"/threads/{thread_id}/messages",
-            params={"limit": limit},
+            params={"limit": max(1, min(limit, 200))},
         )
 
         formatted = []

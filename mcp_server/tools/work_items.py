@@ -6,6 +6,9 @@ from fastmcp import FastMCP
 
 from mcp_server.client import AgentCommsClient
 
+VALID_WORK_ITEM_TYPES = {"epic", "feature", "story", "task"}
+VALID_WORK_ITEM_STATUSES = {"backlog", "in_progress", "review", "done", "cancelled"}
+
 
 def register_work_item_tools(mcp: FastMCP, client: AgentCommsClient):
     """Register work-item-related MCP tools."""
@@ -37,6 +40,11 @@ def register_work_item_tools(mcp: FastMCP, client: AgentCommsClient):
         (or left empty) for epics.
         assigned_agent_id optionally assigns the work item to an agent on creation.
         """
+        if type not in VALID_WORK_ITEM_TYPES:
+            return {
+                "status": "error",
+                "message": f"Invalid type '{type}'. Must be one of: {', '.join(sorted(VALID_WORK_ITEM_TYPES))}",
+            }
         body: dict = {"type": type, "title": title}
         if description:
             body["description"] = description
@@ -64,8 +72,12 @@ def register_work_item_tools(mcp: FastMCP, client: AgentCommsClient):
         """
         params: dict = {}
         if type:
+            if type not in VALID_WORK_ITEM_TYPES:
+                return {"status": "error", "message": f"Invalid type '{type}'. Must be one of: {', '.join(sorted(VALID_WORK_ITEM_TYPES))}"}
             params["type"] = type
         if status:
+            if status not in VALID_WORK_ITEM_STATUSES:
+                return {"status": "error", "message": f"Invalid status '{status}'. Must be one of: {', '.join(sorted(VALID_WORK_ITEM_STATUSES))}"}
             params["status"] = status
         if parent_id:
             params["parent_id"] = parent_id
@@ -115,6 +127,11 @@ def register_work_item_tools(mcp: FastMCP, client: AgentCommsClient):
         if description:
             body["description"] = description
         if status:
+            if status not in VALID_WORK_ITEM_STATUSES:
+                return {
+                    "status": "error",
+                    "message": f"Invalid status '{status}'. Must be one of: {', '.join(sorted(VALID_WORK_ITEM_STATUSES))}",
+                }
             body["status"] = status
         if assigned_agent_id:
             body["assigned_agent_id"] = assigned_agent_id
