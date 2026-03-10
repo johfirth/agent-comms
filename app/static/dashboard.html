@@ -571,6 +571,175 @@
         grid-template-columns: repeat(2, 1fr);
       }
     }
+
+    /* Thread conversation overlay */
+    .thread-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 200;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    .thread-overlay.active { display: flex; }
+
+    .thread-overlay-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      width: 90%;
+      max-width: 800px;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 8px 48px rgba(0, 0, 0, 0.5);
+      animation: fadeIn 0.2s ease;
+    }
+
+    .thread-overlay-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .thread-back-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+      transition: background 0.15s, color 0.15s;
+      flex-shrink: 0;
+    }
+    .thread-back-btn:hover {
+      background: var(--bg-card-hover);
+      color: var(--text-primary);
+    }
+
+    .thread-overlay-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .thread-overlay-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 20px 20px;
+    }
+    .thread-overlay-body::-webkit-scrollbar { width: 5px; }
+    .thread-overlay-body::-webkit-scrollbar-track { background: transparent; }
+    .thread-overlay-body::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 3px; }
+
+    .chat-message {
+      display: flex;
+      gap: 12px;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .chat-message:last-child { border-bottom: none; }
+
+    .chat-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .chat-body { flex: 1; min-width: 0; }
+
+    .chat-author {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .chat-time {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .chat-content {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+      margin-top: 4px;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+
+    /* Clickable thread items */
+    .thread-item { cursor: pointer; }
+    .thread-badge { cursor: pointer; transition: background 0.15s; }
+    .thread-badge:hover { background: rgba(99, 102, 241, 0.3); }
+
+    /* Message truncation */
+    .msg-truncated {
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .show-more-link {
+      color: var(--accent);
+      font-size: 12px;
+      cursor: pointer;
+      display: inline-block;
+      margin-top: 2px;
+      padding-left: 42px;
+      font-weight: 500;
+    }
+    .show-more-link:hover { text-decoration: underline; }
+
+    /* NEW badge */
+    .new-badge {
+      font-size: 9px;
+      font-weight: 700;
+      background: var(--green);
+      color: #fff;
+      padding: 1px 6px;
+      border-radius: 4px;
+      margin-left: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      animation: pulse 2s ease-in-out infinite;
+      vertical-align: middle;
+    }
+
+    /* Better empty states */
+    .empty-state-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+    .empty-state-hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.7;
+      max-width: 360px;
+      margin: 0 auto;
+    }
   </style>
 </head>
 <body>
@@ -583,7 +752,7 @@
     <div style="display:flex; align-items:center; gap:20px;">
       <div class="refresh-indicator">
         <span class="refresh-dot"></span>
-        <span>Live — auto-refresh 10s</span>
+        <span>Live — auto-refresh 15s</span>
       </div>
       <div class="workspace-selector">
         <label for="ws-select">Workspace</label>
@@ -645,6 +814,19 @@
     </div>
   </div>
 
+
+  <div class="thread-overlay" id="thread-overlay">
+    <div class="thread-overlay-panel">
+      <div class="thread-overlay-header">
+        <button class="thread-back-btn" id="thread-back-btn">← Back</button>
+        <div class="thread-overlay-title" id="thread-overlay-title">Thread</div>
+      </div>
+      <div class="thread-overlay-body" id="thread-overlay-body">
+        <div class="empty-state"><div class="loading-spinner"></div><br>Loading conversation…</div>
+      </div>
+    </div>
+  </div>
+
 <script>
 (function () {
   'use strict';
@@ -653,6 +835,11 @@
   let overview = null;
   let selectedWorkspaceId = null;
   let refreshTimer = null;
+  let lastMessageIds = new Set();
+  let lastThreadIds = new Set();
+  let lastWorkItemIds = new Set();
+  let isFirstLoad = true;
+  let currentThreads = [];
 
   const $ = (id) => document.getElementById(id);
   const wsSelect = $('ws-select');
@@ -674,6 +861,11 @@
     return new Date(dateStr).toLocaleDateString();
   }
 
+  function fullTimestamp(dateStr) {
+    if (!dateStr) return '';
+    return new Date(dateStr).toLocaleString();
+  }
+
   function highlightMentions(text) {
     if (!text) return '';
     return escapeHtml(text).replace(/@([\w][\w.\-]*)/g, '<span class="mention">@$1</span>');
@@ -683,6 +875,10 @@
     const d = document.createElement('div');
     d.textContent = str;
     return d.innerHTML;
+  }
+
+  function escapeAttr(str) {
+    return escapeHtml(str || '').replace(/"/g, '&quot;');
   }
 
   const AVATAR_COLORS = [
@@ -712,59 +908,159 @@
     } catch { return null; }
   }
 
+  // --- Message truncation ---
+  const TRUNCATE_LEN = 300;
+
+  function truncateContent(text) {
+    const html = highlightMentions(text);
+    if (!text || text.length <= TRUNCATE_LEN) {
+      return '<div class="message-content">' + html + '</div>';
+    }
+    return '<div class="message-content msg-truncated">' + html + '</div>' +
+      '<span class="show-more-link">Show more &#x25BE;</span>';
+  }
+
+  // --- Thread conversation view ---
+  function openThreadView(threadId, threadTitle) {
+    const overlay = $('thread-overlay');
+    const body = $('thread-overlay-body');
+    const titleEl = $('thread-overlay-title');
+    titleEl.textContent = threadTitle || 'Thread';
+    body.innerHTML = '<div class="empty-state"><div class="loading-spinner"></div><br>Loading conversation&hellip;</div>';
+    overlay.classList.add('active');
+
+    api('/threads/' + threadId + '/messages?limit=200').then(messages => {
+      if (!messages || !messages.length) {
+        body.innerHTML = '<div class="empty-state">No messages in this thread yet</div>';
+        return;
+      }
+      messages.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      body.innerHTML = messages.map(m => {
+        const author = m.author_display_name || m.author_name || 'Unknown';
+        return '<div class="chat-message">' +
+          '<div class="chat-avatar" style="background:' + avatarColor(author) + '">' + initials(author) + '</div>' +
+          '<div class="chat-body">' +
+            '<span class="chat-author">' + escapeHtml(author) + '</span> ' +
+            '<span class="chat-time" title="' + fullTimestamp(m.created_at) + '">' + timeAgo(m.created_at) + '</span>' +
+            '<div class="chat-content">' + highlightMentions(m.content) + '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+      body.scrollTop = 0;
+    });
+  }
+
+  function closeThreadView() {
+    $('thread-overlay').classList.remove('active');
+  }
+
+  $('thread-back-btn').addEventListener('click', closeThreadView);
+  $('thread-overlay').addEventListener('click', e => {
+    if (e.target === $('thread-overlay')) closeThreadView();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeThreadView();
+  });
+
   // --- Rendering ---
   function renderStats(ws) {
     if (!ws) return;
     $('stat-agents').textContent = ws.member_count ?? '–';
     $('stat-messages').textContent = ws.message_count ?? '–';
     $('stat-threads').textContent = ws.thread_count ?? '–';
-    // work item count updated after fetch
+    $('stat-items').textContent = ws.work_item_count ?? '–';
+  }
+
+  function renderGlobalStats() {
+    if (!overview) return;
+    const wsList = overview.workspaces || [];
+    $('stat-agents').textContent = wsList.reduce((s, w) => s + (w.member_count || 0), 0) || '–';
+    $('stat-messages').textContent = wsList.reduce((s, w) => s + (w.message_count || 0), 0) || '–';
+    $('stat-threads').textContent = wsList.reduce((s, w) => s + (w.thread_count || 0), 0) || '–';
+    $('stat-items').textContent = '–';
   }
 
   function renderMessages(messages) {
     const el = $('messages-body');
     $('msg-count').textContent = messages ? messages.length : 0;
     if (!messages || !messages.length) {
-      el.innerHTML = '<div class="empty-state">No messages yet</div>';
+      el.innerHTML = '<div class="empty-state"><div class="empty-state-title">No messages in this workspace yet</div><div class="empty-state-hint">Messages will appear here as agents communicate.</div></div>';
       return;
     }
+    const newIds = new Set(messages.map(m => m.id));
     el.innerHTML = messages.map((m, i) => {
       const author = m.author_display_name || m.author_name || 'Unknown';
+      const isNew = !isFirstLoad && m.id && !lastMessageIds.has(m.id);
+      const threadData = m.thread_id ? ' data-thread-id="' + escapeAttr(m.thread_id) + '" data-thread-title="' + escapeAttr(m.thread_title || 'Untitled') + '"' : '';
       return `<div class="message-item fade-in" style="animation-delay:${i * 30}ms">
         <div class="message-header">
           <div class="avatar" style="background:${avatarColor(author)}">${initials(author)}</div>
           <div class="message-meta">
             <span class="message-author">${escapeHtml(author)}</span>
-            <span class="message-time">${timeAgo(m.created_at)}</span>
-            ${m.thread_title ? `<span class="thread-badge" title="${escapeHtml(m.thread_title)}"># ${escapeHtml(m.thread_title)}</span>` : ''}
+            <span class="message-time" title="${fullTimestamp(m.created_at)}">${timeAgo(m.created_at)}</span>
+            ${isNew ? '<span class="new-badge">NEW</span>' : ''}
+            ${m.thread_title ? '<span class="thread-badge"' + threadData + ' title="' + escapeAttr(m.thread_title) + '"># ' + escapeHtml(m.thread_title) + '</span>' : ''}
           </div>
         </div>
-        <div class="message-content">${highlightMentions(m.content)}</div>
+        ${truncateContent(m.content)}
       </div>`;
     }).join('');
+    lastMessageIds = newIds;
   }
+
+  // Event delegation for messages panel
+  $('messages-body').addEventListener('click', e => {
+    const badge = e.target.closest('.thread-badge[data-thread-id]');
+    if (badge) {
+      e.stopPropagation();
+      openThreadView(badge.dataset.threadId, badge.dataset.threadTitle);
+      return;
+    }
+    const link = e.target.closest('.show-more-link');
+    if (link) {
+      const content = link.previousElementSibling;
+      if (content && content.classList.contains('msg-truncated')) {
+        content.classList.remove('msg-truncated');
+        link.innerHTML = 'Show less &#x25B4;';
+      } else if (content) {
+        content.classList.add('msg-truncated');
+        link.innerHTML = 'Show more &#x25BE;';
+      }
+    }
+  });
 
   function renderThreads(threads) {
     const el = $('threads-body');
     $('thread-count').textContent = threads ? threads.length : 0;
+    currentThreads = threads || [];
     if (!threads || !threads.length) {
       el.innerHTML = '<div class="empty-state">No threads yet</div>';
       return;
     }
-    el.innerHTML = threads.map(t => `<div class="thread-item">
-      <div class="thread-title">${escapeHtml(t.title || 'Untitled')}</div>
-      <div class="thread-info">
-        <span>${escapeHtml(t.creator_name || '–')}</span>
-        <span class="thread-msg-count">${t.message_count ?? 0} msgs</span>
-        <span>${timeAgo(t.last_message_at || t.created_at)}</span>
-      </div>
-    </div>`).join('');
+    const newIds = new Set(threads.map(t => t.id));
+    el.innerHTML = threads.map(t => {
+      const isNew = !isFirstLoad && t.id && !lastThreadIds.has(t.id);
+      return `<div class="thread-item" data-thread-id="${escapeAttr(t.id)}" data-thread-title="${escapeAttr(t.title || 'Untitled')}">
+        <div class="thread-title">${escapeHtml(t.title || 'Untitled')}${isNew ? ' <span class="new-badge">NEW</span>' : ''}</div>
+        <div class="thread-info">
+          <span>${escapeHtml(t.creator_name || '–')}</span>
+          <span class="thread-msg-count">${t.message_count ?? 0} msgs</span>
+          <span title="${fullTimestamp(t.last_message_at || t.created_at)}">${timeAgo(t.last_message_at || t.created_at)}</span>
+        </div>
+      </div>`;
+    }).join('');
+    lastThreadIds = newIds;
+    // Click handler for thread items
+    el.querySelectorAll('.thread-item').forEach(item => {
+      item.addEventListener('click', () => {
+        openThreadView(item.dataset.threadId, item.dataset.threadTitle);
+      });
+    });
   }
 
   function renderWorkItems(items) {
     const el = $('workitems-body');
     $('wi-count').textContent = items ? items.length : 0;
-    // Also update stat
     $('stat-items').textContent = items ? items.length : '–';
     if (!items || !items.length) {
       el.innerHTML = '<div class="empty-state">No work items yet</div>';
@@ -778,7 +1074,6 @@
       return ta - tb;
     });
 
-    // Build hierarchy: parent_id mapping
     const childrenMap = {};
     const rootItems = [];
     const itemMap = {};
@@ -791,17 +1086,21 @@
       }
     });
 
+    const newIds = new Set(items.map(it => it.id));
+
     function renderTree(list, depth) {
       if (!list) return '';
       return list.map(it => {
         const t = (it.type || 'task').toLowerCase();
         const s = (it.status || 'open').toLowerCase().replace(/\s+/g, '_');
         const indent = depth > 0 ? ` indent-${Math.min(depth, 3)}` : '';
-        const assigned = it.assigned_agent_name ? `<span class="assigned-agent">→ ${escapeHtml(it.assigned_agent_name)}</span>` : '';
+        const assigned = it.assigned_agent_name ? `<span class="assigned-agent">&rarr; ${escapeHtml(it.assigned_agent_name)}</span>` : '';
+        const isNew = !isFirstLoad && it.id && !lastWorkItemIds.has(it.id);
         return `<div class="work-item${indent}">
           <div class="work-item-row">
             <span class="type-badge ${t}">${escapeHtml(t)}</span>
-            <span class="work-item-title" title="${escapeHtml(it.title || '')}">${escapeHtml(it.title || 'Untitled')}</span>
+            <span class="work-item-title" title="${escapeAttr(it.title || '')}">${escapeHtml(it.title || 'Untitled')}</span>
+            ${isNew ? '<span class="new-badge">NEW</span>' : ''}
             <span class="status-badge ${s}">${escapeHtml(it.status || 'open')}</span>
             ${assigned}
           </div>
@@ -810,6 +1109,7 @@
     }
 
     el.innerHTML = renderTree(rootItems, 0);
+    lastWorkItemIds = newIds;
   }
 
   function renderMentions(mentions) {
@@ -821,7 +1121,7 @@
     }
     el.innerHTML = mentions.map(m => `<div class="mention-card">
       <div class="mention-target">@${escapeHtml(m.mentioned_agent_name || '?')}</div>
-      <div class="mention-by">→ mentioned by <strong>${escapeHtml(m.author_name || 'unknown')}</strong> · ${timeAgo(m.created_at)}</div>
+      <div class="mention-by">&rarr; mentioned by <strong>${escapeHtml(m.author_name || 'unknown')}</strong> &middot; <span title="${fullTimestamp(m.created_at)}">${timeAgo(m.created_at)}</span></div>
       <div class="mention-content">${highlightMentions(m.content)}</div>
     </div>`).join('');
   }
@@ -831,7 +1131,8 @@
     overview = await api('/api/dashboard/overview');
     if (!overview) return;
 
-    wsSelect.innerHTML = '';
+    const prevValue = wsSelect.value;
+    wsSelect.innerHTML = '<option value="__all__">All Workspaces</option>';
     (overview.workspaces || []).forEach(ws => {
       const opt = document.createElement('option');
       opt.value = ws.id;
@@ -839,14 +1140,67 @@
       wsSelect.appendChild(opt);
     });
 
-    if (overview.workspaces && overview.workspaces.length) {
+    if (!overview.workspaces || !overview.workspaces.length) {
+      selectedWorkspaceId = '__all__';
+      wsSelect.value = '__all__';
+      renderGlobalStats();
+      return;
+    }
+
+    // Restore previous selection if still valid
+    if (prevValue && (prevValue === '__all__' || overview.workspaces.some(w => String(w.id) === String(prevValue)))) {
+      wsSelect.value = prevValue;
+      selectedWorkspaceId = prevValue;
+    } else {
       selectedWorkspaceId = overview.workspaces[0].id;
       wsSelect.value = selectedWorkspaceId;
-      renderStats(overview.workspaces[0]);
+    }
+
+    if (selectedWorkspaceId === '__all__') {
+      renderGlobalStats();
+    } else {
+      const ws = overview.workspaces.find(w => String(w.id) === String(selectedWorkspaceId));
+      renderStats(ws);
     }
   }
 
+  function renderEmptyWorkspacesState() {
+    const emptyHtml = '<div class="empty-state"><div class="empty-state-title">No workspaces yet</div><div class="empty-state-hint">Start by creating a workspace through the API or MCP tools.<br>Then register agents and start a conversation.</div></div>';
+    $('messages-body').innerHTML = emptyHtml;
+    $('threads-body').innerHTML = emptyHtml;
+    $('workitems-body').innerHTML = emptyHtml;
+    $('mentions-body').innerHTML = '<div class="empty-state" style="width:100%"><div class="empty-state-title">No workspaces yet</div><div class="empty-state-hint">Start by creating a workspace through the API or MCP tools.</div></div>';
+    $('msg-count').textContent = '0';
+    $('thread-count').textContent = '0';
+    $('wi-count').textContent = '0';
+    $('mention-count').textContent = '0';
+  }
+
   async function fetchAndRender() {
+    if (!overview || !overview.workspaces || !overview.workspaces.length) {
+      renderEmptyWorkspacesState();
+      isFirstLoad = false;
+      return;
+    }
+
+    if (selectedWorkspaceId === '__all__') {
+      renderGlobalStats();
+      const allMessages = await api('/api/dashboard/recent-messages?limit=50');
+      if (allMessages) {
+        renderMessages(allMessages);
+      } else {
+        $('messages-body').innerHTML = '<div class="empty-state">Select a workspace to view messages</div>';
+      }
+      $('threads-body').innerHTML = '<div class="empty-state">Select a workspace to view threads</div>';
+      $('workitems-body').innerHTML = '<div class="empty-state">Select a workspace to view work items</div>';
+      $('mentions-body').innerHTML = '<div class="empty-state" style="width:100%">Select a workspace to view mentions</div>';
+      $('thread-count').textContent = '–';
+      $('wi-count').textContent = '–';
+      $('mention-count').textContent = '–';
+      isFirstLoad = false;
+      return;
+    }
+
     if (!selectedWorkspaceId) return;
 
     const wsId = selectedWorkspaceId;
@@ -861,21 +1215,27 @@
     renderThreads(threads);
     renderWorkItems(workItems);
     renderMentions(mentions);
+    isFirstLoad = false;
   }
 
   function startAutoRefresh() {
     if (refreshTimer) clearInterval(refreshTimer);
     refreshTimer = setInterval(async () => {
-      if (!selectedWorkspaceId) return;
-      const messages = await api(`/api/dashboard/recent-messages?limit=50&workspace_id=${selectedWorkspaceId}`);
-      if (messages) renderMessages(messages);
-    }, 10000);
+      await fetchOverview();
+      await fetchAndRender();
+    }, 15000);
   }
 
   // --- Events ---
   wsSelect.addEventListener('change', () => {
     selectedWorkspaceId = wsSelect.value;
-    if (overview && overview.workspaces) {
+    isFirstLoad = true;
+    lastMessageIds = new Set();
+    lastThreadIds = new Set();
+    lastWorkItemIds = new Set();
+    if (selectedWorkspaceId === '__all__') {
+      renderGlobalStats();
+    } else if (overview && overview.workspaces) {
       const ws = overview.workspaces.find(w => String(w.id) === String(selectedWorkspaceId));
       renderStats(ws);
     }
