@@ -7,4 +7,4 @@ MAX_MENTION_SCAN_LENGTH = 50000
 
 def parse_mentions(content: str) -> list[str]:
     """Extract unique @mentioned agent names from message content."""
-    return list(set(MENTION_PATTERN.findall(content[:MAX_MENTION_SCAN_LENGTH])))
+    return sorted(set(MENTION_PATTERN.findall(content[:MAX_MENTION_SCAN_LENGTH])))

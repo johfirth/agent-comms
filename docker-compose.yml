@@ -2,13 +2,14 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: agent_comms
-      POSTGRES_PASSWORD: agent_comms_dev
-      POSTGRES_DB: agent_comms
+      POSTGRES_USER: ${POSTGRES_USER:-agent_comms}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agent_comms_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-agent_comms}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U agent_comms"]
       interval: 5s
@@ -20,11 +21,12 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://agent_comms:agent_comms_dev@db:5432/agent_comms
-      ADMIN_API_KEY: admin-dev-key-change-me
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-agent_comms}:${POSTGRES_PASSWORD:-agent_comms_dev}@db:5432/${POSTGRES_DB:-agent_comms}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-admin-dev-key-change-me}
     depends_on:
       db:
         condition: service_healthy
+    restart: unless-stopped
     command: >
       sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
 

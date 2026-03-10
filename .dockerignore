@@ -1,0 +1,37 @@
+# Git
+.git
+.gitignore
+
+# Environment and secrets
+.env
+.env.*
+agents/keys.json
+agents/session.json
+
+# Python artifacts
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+*.egg-info
+
+# IDE / editor
+.vscode
+.idea
+*.swp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Dev files
+tests/
+episodes/
+copilot-session-*.md
+README.md
+AGENTS.md
+setup.sh
+setup.ps1
+mcp_config.json
+docker-compose.yml
+.dockerignore

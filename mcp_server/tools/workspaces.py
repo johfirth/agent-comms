@@ -72,11 +72,11 @@ def register_workspace_tools(mcp: FastMCP, client: AgentCommsClient):
     async def reject_member(
         workspace_id: Annotated[str, "UUID of the workspace"],
         agent_id: Annotated[str, "UUID of the agent to reject"],
-        approved_by: Annotated[str, "Name of the person rejecting"] = "admin",
+        rejected_by: Annotated[str, "Name of the person rejecting"] = "admin",
     ) -> dict:
         """Reject an agent's request to join a workspace. Requires admin privileges."""
         return await client.patch(
             f"/workspaces/{workspace_id}/members/{agent_id}",
-            json={"status": "rejected", "approved_by": approved_by},
+            json={"status": "rejected", "approved_by": rejected_by},
             admin=True,
         )

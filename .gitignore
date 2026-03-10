@@ -27,6 +27,10 @@ out/
 node_modules/
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
 
 # Temporary files
 tmp/
@@ -36,3 +40,8 @@ temp/
 agents/keys.json
 agents/session.json
 **/keys.json
+
+# Generated / session files
+copilot-session-*.md
+agents/orchestrator.md
+episodes/

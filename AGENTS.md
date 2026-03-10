@@ -1,107 +1,204 @@
 # Agent Communication Server — Copilot CLI Instructions
 
 This project provides a multi-agent communication server. You (Copilot CLI)
-can participate in conversations with other AI agents and human users through
-the MCP tools registered by this project's MCP server.
+are the **orchestrator** — you spawn agent personas, manage their conversations
+through the MCP tools, and track work items. The agent-comms server is the
+central log for all inter-agent communication on long-running tasks and projects.
 
-## Your Role
+**The server is the single source of truth.** All agent communication MUST go
+through the MCP tools. This ensures humans can read every discussion, every
+decision, and every task assignment via the dashboard.
 
-You are a participant in turn-based conversations hosted on the Agent
-Communication Server. You have a persistent identity (agent name + API key),
-you belong to workspaces, and you communicate by posting messages to threads.
-
-**The server is the single source of truth.** You MUST read the conversation
-from the server before responding. Never assume you know what was said — always
-call `read_conversation` first.
-
-## Getting Started (First Time)
-
-If the user hasn't set up yet, guide them through these steps:
-
-1. **Start the server**: `docker compose up -d` (from the project root)
-2. **Register your agent**: Call `setup_my_agent` with a name and display name
-3. **Join a workspace**: Call `quick_join_workspace` with a workspace name
-4. **Start or join a conversation**: Call `start_conversation` or `read_conversation`
-
-## Turn-Based Communication Pattern
-
-**Every interaction follows this pattern:**
+## Architecture
 
 ```
-1. READ   → call read_conversation(thread_id) to see what's been said
-2. THINK  → decide what to say based on the conversation history
-3. POST   → call post_message(thread_id, content) with ONE message
-4. VERIFY → optionally call read_conversation again to confirm
+User gives a directive (e.g. "ask the PMs to review CRM requirements")
+  ↓
+Copilot CLI (orchestrator)
+  ├── Reads agent personas from .github/agents/*.agent.md
+  ├── Registers agents on the server via MCP tools
+  ├── Creates workspace + thread for the topic
+  ├── For each agent turn:
+  │     1. use_agent(name) — switch identity
+  │     2. read_conversation(thread_id) — get full context
+  │     3. Generate response in character (using persona + model)
+  │     4. post_message(thread_id, content) — log it on the server
+  │     5. Check for @mentions → spawn the mentioned agent next
+  ├── Track work items (Epics → Features → Stories → Tasks)
+  └── Report summary back to the user
+```
+
+## Agent Personas
+
+Agent personas are **`.agent.md` files** in `.github/agents/` — the standard
+Copilot CLI custom agent format. Each file has YAML frontmatter and defines:
+
+- **Name** and **Display Name** (identity on the server)
+- **Model** (which LLM to use when generating responses)
+- **Persona** (who they are, how they think)
+- **Core Principles** (decision-making framework)
+- **Communication Style** (how they write)
+- **MCP Rules** (how they interact with the server)
+
+Available personas:
+
+| File | Name | Role |
+|------|------|------|
+| `cto.agent.md` | `cto` | Strategic tech decisions, pragmatic, path of least resistance |
+| `product-manager.agent.md` | `product-manager` | Requirements, scope, prioritisation, user-first |
+| `developer.agent.md` | `developer` | Implementation, estimation, building, technical trade-offs |
+
+To add a new persona, create a new `.agent.md` file in `.github/agents/` following the same format.
+
+## Orchestration Flow
+
+When the user gives a directive:
+
+### 1. Parse the Directive
+
+Identify which personas are needed and what the topic is. Examples:
+
+- *"ask the product managers to review CRM requirements"* → `product-manager`, probably `cto`
+- *"have the developers build the feature list"* → `developer`, reference prior discussion
+- *"discuss whether we should use microservices"* → `cto`, `developer`
+
+### 2. Set Up Infrastructure
+
+```
+agent-comms-quick_join_workspace(workspace_name="project-name")
+```
+
+For each agent persona needed:
+```
+agent-comms-setup_my_agent(name="cto", display_name="CTO — Chief Technology Officer")
+agent-comms-quick_join_workspace(workspace_name="project-name")
+```
+
+### 3. Start the Conversation
+
+```
+agent-comms-start_conversation(
+    workspace_name="project-name",
+    thread_title="CRM Requirements Review",
+    first_message="The team has been asked to review build requirements for a CRM. @product-manager please lead the analysis. @cto please weigh in on strategy."
+)
+```
+
+### 4. Run the Agent Loop
+
+For each agent that needs to respond:
+
+1. **Read their persona** from `.github/agents/{name}.agent.md`
+2. **Switch identity**: `agent-comms-use_agent(name="{name}")`
+3. **Read the thread**: `agent-comms-read_conversation(thread_id)`
+4. **Generate a response** in character — use the persona's principles and style, powered by the model specified in their persona file
+5. **Post it**: `agent-comms-post_message(thread_id, content)`
+6. **Check for @mentions** in the posted message → queue those agents next
+
+### 5. Handle @Mentions (Agent Triggering)
+
+When an agent's message contains `@another-agent`, that agent is triggered next:
+
+```
+Product Manager posts: "...@cto should we buy or build the contact sync?"
+  → Orchestrator detects @cto
+  → Switches to CTO, reads thread, responds in character
+CTO posts: "Buy. Use a SaaS integration. @developer estimate the integration work."
+  → Orchestrator detects @developer
+  → Switches to Developer, reads thread, responds
+```
+
+This creates natural, turn-based discussion that is fully logged on the server.
+
+### 6. Track Work Items
+
+When agents agree on work to be done, create work items:
+
+```
+agent-comms-create_work_item(workspace_id, type="epic", title="CRM System")
+agent-comms-create_work_item(workspace_id, type="feature", title="Contact Management", parent_id=epic_id)
+agent-comms-create_work_item(workspace_id, type="story", title="User can search contacts", parent_id=feature_id)
+agent-comms-create_work_item(workspace_id, type="task", title="Build search API", parent_id=story_id)
+```
+
+### 7. Completion
+
+The loop runs until:
+- A set number of rounds completes (default: ~5 rounds)
+- An agent explicitly states consensus
+- The user intervenes
+
+After the discussion, summarise to the user:
+- Key decisions made
+- Work items created
+- Open questions
+- Recommended next steps
+
+## Turn-Based Communication Rules
+
+Every agent interaction follows this pattern:
+
+```
+1. READ   → read_conversation(thread_id)
+2. THINK  → generate response in character using persona + model
+3. POST   → post_message(thread_id, content) — ONE message per turn
+4. TRACK  → create/update work items if decisions were made
 ```
 
 **Rules:**
-- Always read before posting. The server state may have changed since your last turn.
+- Always read before posting. The server state may have changed.
 - Post ONE message per turn. Don't flood the thread.
-- Use `@agent_name` to mention other agents when you need their attention.
-- Keep messages substantive. State your reasoning, not just conclusions.
+- Use `@agent_name` to mention other agents when input is needed.
+- State reasoning, not just conclusions.
+- All communication goes through the MCP tools — never bypass the server.
 
-## Key MCP Tools (Workflow Layer)
-
-These high-level tools handle multi-step workflows in a single call:
+## Key MCP Tools
 
 | Tool | Purpose |
 |------|---------|
-| `setup_my_agent` | Register yourself (or recover saved credentials) |
-| `whoami` | Check your current identity and available workspaces |
-| `use_agent` | Switch between multiple agent identities |
-| `quick_join_workspace` | Join or create a workspace in one step |
-| `start_conversation` | Create a thread and post the opening message |
-| `read_conversation` | **Read the full thread** — call this before every response |
-| `post_message` | Post a single message to a thread |
+| `setup_my_agent` | Register an agent identity (once per persona) |
+| `whoami` | Check current identity |
+| `use_agent` | Switch between agent identities |
+| `quick_join_workspace` | Create/join a workspace |
+| `start_conversation` | Create a thread + post opening message |
+| `read_conversation` | Read full thread — **call before every response** |
+| `post_message` | Post one message to a thread |
 | `list_conversations` | See all threads in a workspace |
-| `my_mentions` | Check if anyone @mentioned you |
+| `my_mentions` | Check if an agent was @mentioned |
+| `create_work_item` | Create Epic/Feature/Story/Task |
+| `update_work_item` | Update status or assignment |
+| `list_work_items` | List work items in a workspace |
 
-## Multi-User Collaboration
+## Example: End-to-End
 
-Multiple people using Copilot CLI can connect to the SAME server:
+**User:** *"Ask the product manager agents to review the possible build requirements for a CRM"*
 
-1. Each person runs `setup_my_agent` with their own name
-2. Each person calls `quick_join_workspace` for the shared workspace
-3. Anyone can `start_conversation` or `read_conversation` + `post_message`
-4. Use `my_mentions` to find conversations where you're needed
+**Copilot CLI orchestrates:**
 
-Agent credentials are stored locally in `agents/keys.json` (gitignored).
-The server URL and admin key are in the MCP config.
+1. Register `product-manager` and `cto` on the server
+2. Create/join workspace `crm-project`
+3. Start thread "CRM Build Requirements Review"
+4. Post kickoff message mentioning `@product-manager` and `@cto`
+5. Switch to `product-manager` → read → respond with requirements analysis
+6. PM mentions `@cto` → switch to CTO → read → respond with strategic input
+7. CTO mentions `@product-manager` → PM refines requirements
+8. Loop until consensus (~3-5 rounds)
+9. Create work items for agreed features
+10. Summarise to user
 
-## Resuming Conversations
+**User follows up:** *"Have the developer agents build the feature list"*
 
-Conversations persist on the server. To resume:
+**Copilot CLI orchestrates:**
 
-1. Call `list_conversations` to see available threads
-2. Call `read_conversation` with the thread_id to catch up
-3. Call `post_message` to continue where you left off
-
-## Example: Starting a Discussion
-
-```
-User: "Let's discuss microservices vs monolith for our new project"
-
-Copilot CLI should:
-1. setup_my_agent("copilot-cli", "Copilot CLI Agent")
-2. quick_join_workspace("architecture-decisions")
-3. start_conversation("architecture-decisions", "Microservices vs Monolith", "@team-lead Let's discuss...")
-4. Share the thread_id so others can join
-```
-
-## Example: Responding to a Mention
-
-```
-User: "Check if anyone mentioned me"
-
-Copilot CLI should:
-1. my_mentions()
-2. For each mention, read_conversation(thread_id) to see context
-3. post_message(thread_id, "@author_name Here's my response...")
-```
+1. Read the existing CRM thread for context
+2. Register `developer` on the server
+3. Start new thread "CRM Feature Implementation"
+4. Post the agreed feature list from the PM discussion
+5. Developer reads, estimates, creates task work items
+6. Developer does actual coding work in the target repo
+7. Updates work item statuses as progress is made
 
 ## MCP Server Configuration
-
-To connect Copilot CLI to this server, add to your MCP config:
 
 ```json
 {
@@ -119,5 +216,5 @@ To connect Copilot CLI to this server, add to your MCP config:
 }
 ```
 
-The `AGENT_COMMS_API_KEY` env var is NOT needed — the workflow tools
-handle authentication via the local key store automatically.
+No `AGENT_COMMS_API_KEY` needed — the workflow tools handle auth via the
+local key store (`agents/keys.json`) automatically.
