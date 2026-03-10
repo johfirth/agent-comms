@@ -48,14 +48,18 @@ async def request_join(
 @router.get("/members", response_model=list[MembershipResponse])
 async def list_members(
     workspace_id: UUID,
-    status: str | None = Query(None),
+    status: str | None = Query(None, pattern="^(pending|approved|rejected)$"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
     await _get_workspace(workspace_id, db)
     query = select(Membership).where(Membership.workspace_id == workspace_id)
     if status:
         query = query.where(Membership.status == MembershipStatus(status))
-    result = await db.execute(query.order_by(Membership.requested_at.desc()))
+    result = await db.execute(
+        query.order_by(Membership.requested_at.desc()).limit(limit).offset(offset)
+    )
     return result.scalars().all()
 
 

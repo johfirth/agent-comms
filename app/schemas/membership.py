@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from uuid import UUID
 from datetime import datetime
 from typing import Literal
@@ -18,4 +18,4 @@ class MembershipResponse(BaseModel):
 
 class MembershipUpdate(BaseModel):
     status: Literal["approved", "rejected"]
-    approved_by: str
+    approved_by: str = Field(..., min_length=1, max_length=255)

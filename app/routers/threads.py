@@ -38,12 +38,14 @@ async def create_thread(
 async def list_threads(
     workspace_id: UUID,
     work_item_id: UUID | None = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
     query = select(Thread).where(Thread.workspace_id == workspace_id)
     if work_item_id:
         query = query.where(Thread.work_item_id == work_item_id)
-    result = await db.execute(query.order_by(Thread.created_at.desc()))
+    result = await db.execute(query.order_by(Thread.created_at.desc()).limit(limit).offset(offset))
     return result.scalars().all()
 
 

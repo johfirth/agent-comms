@@ -64,9 +64,11 @@ async def create_work_item(
 @router.get("", response_model=list[WorkItemResponse])
 async def list_work_items(
     workspace_id: UUID,
-    type: str | None = Query(None),
-    status: str | None = Query(None),
+    type: str | None = Query(None, pattern="^(epic|feature|story|task)$"),
+    status: str | None = Query(None, pattern="^(backlog|in_progress|review|done|cancelled)$"),
     parent_id: UUID | None = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
     query = select(WorkItem).where(WorkItem.workspace_id == workspace_id)
@@ -76,7 +78,7 @@ async def list_work_items(
         query = query.where(WorkItem.status == status)
     if parent_id:
         query = query.where(WorkItem.parent_id == parent_id)
-    result = await db.execute(query.order_by(WorkItem.created_at.desc()))
+    result = await db.execute(query.order_by(WorkItem.created_at.desc()).limit(limit).offset(offset))
     return result.scalars().all()
 
 

@@ -1,6 +1,6 @@
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/agents", tags=["webhooks"])
 
 
 class WebhookUpdate(BaseModel):
-    webhook_url: str
+    webhook_url: str = Field(..., min_length=1, max_length=2048, pattern=r"^https?://")
 
 
 @router.put("/{agent_id}/webhook", response_model=AgentResponse)

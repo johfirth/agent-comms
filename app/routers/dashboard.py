@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query
+from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -104,7 +105,7 @@ async def dashboard_overview(db: AsyncSession = Depends(get_db)):
 @router.get("/recent-messages")
 async def recent_messages(
     limit: int = Query(50, ge=1, le=200),
-    workspace_id: str | None = Query(None),
+    workspace_id: UUID | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
     """Recent messages across all threads, with author and thread info joined."""
@@ -139,7 +140,9 @@ async def recent_messages(
 
 @router.get("/work-items")
 async def dashboard_work_items(
-    workspace_id: str = Query(...),
+    workspace_id: UUID = Query(...),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
     """Work items in a workspace with assigned agent name."""
@@ -149,6 +152,8 @@ async def dashboard_work_items(
         .outerjoin(Agent, WorkItem.assigned_agent_id == Agent.id)
         .where(WorkItem.workspace_id == workspace_id)
         .order_by(WorkItem.created_at.desc())
+        .limit(limit)
+        .offset(offset)
     )
 
     result = await db.execute(stmt)
@@ -170,7 +175,9 @@ async def dashboard_work_items(
 
 @router.get("/threads")
 async def dashboard_threads(
-    workspace_id: str = Query(...),
+    workspace_id: UUID = Query(...),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
     """Threads in a workspace with message count and last message time."""
@@ -199,6 +206,8 @@ async def dashboard_threads(
         .outerjoin(msg_stats_sq, msg_stats_sq.c.thread_id == Thread.id)
         .where(Thread.workspace_id == workspace_id)
         .order_by(Thread.created_at.desc())
+        .limit(limit)
+        .offset(offset)
     )
 
     result = await db.execute(stmt)
@@ -219,7 +228,7 @@ async def dashboard_threads(
 
 @router.get("/mentions")
 async def dashboard_mentions(
-    workspace_id: str | None = Query(None),
+    workspace_id: UUID | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
