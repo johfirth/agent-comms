@@ -3,7 +3,9 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import text
 
+from app.database import engine
 from app.routers import agents, dashboard, dashboard_page, memberships, mentions, messages, threads, webhooks, work_items, workspaces
 
 logger = logging.getLogger(__name__)
@@ -13,6 +15,27 @@ app = FastAPI(
     description="A communication server for AI agents to collaborate in workspaces on software development.",
     version="0.1.0",
 )
+
+
+@app.on_event("startup")
+async def verify_tables():
+    """Verify critical tables exist after alembic migration."""
+    required = ["agents", "workspaces", "memberships", "threads", "messages", "mentions", "work_items"]
+    async with engine.connect() as conn:
+        result = await conn.execute(
+            text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+        )
+        existing = {row[0] for row in result}
+
+    missing = [t for t in required if t not in existing]
+    if missing:
+        logger.error(
+            "CRITICAL: Required tables missing after migration: %s. "
+            "The database may need to be reset: docker compose down -v && docker compose up -d",
+            missing,
+        )
+    else:
+        logger.info("Database verified: all %d required tables present", len(required))
 
 
 @app.exception_handler(IntegrityError)
