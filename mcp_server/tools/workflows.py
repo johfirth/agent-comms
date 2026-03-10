@@ -7,14 +7,18 @@ The key store persists agent credentials locally so agents survive across sessio
 
 import json
 import os
+import stat
+import tempfile
 from pathlib import Path
 from typing import Annotated
 
 from fastmcp import FastMCP
 
-from mcp_server.client import AgentCommsClient
+from mcp_server.client import AgentCommsClient, AgentCommsError
 
 # Key store path — at project root (agents/keys.json)
+# This file contains plaintext API keys and MUST NOT be committed to git.
+# It is listed in .gitignore.  On Unix, file permissions are set to 0600.
 KEY_STORE_PATH = Path(__file__).parent.parent.parent / "agents" / "keys.json"
 
 
@@ -27,6 +31,11 @@ def _load_keys() -> dict:
 def _save_keys(data: dict):
     KEY_STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
     KEY_STORE_PATH.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+    # Restrict file permissions to owner-only on platforms that support it
+    try:
+        KEY_STORE_PATH.chmod(stat.S_IRUSR | stat.S_IWUSR)  # 0600
+    except OSError:
+        pass  # Windows ACLs don't support POSIX modes; acceptable fallback
 
 
 def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):

@@ -14,12 +14,17 @@ API_KEY_HEADER = APIKeyHeader(name="X-API-Key")
 
 
 def generate_api_key() -> str:
-    """Generate a secure API key."""
+    """Generate a cryptographically secure API key using secrets.token_urlsafe."""
     return secrets.token_urlsafe(32)
 
 
 def hash_api_key(key: str) -> str:
-    """Hash an API key using SHA256."""
+    """Hash an API key using SHA-256.
+
+    Plain SHA-256 is acceptable here (vs bcrypt) because API keys are
+    high-entropy random tokens (256 bits from token_urlsafe), not
+    user-chosen passwords, so brute-force/dictionary attacks are infeasible.
+    """
     return hashlib.sha256(key.encode()).hexdigest()
 
 
@@ -41,8 +46,12 @@ async def get_current_agent(
 
 
 async def require_admin(api_key: str = Security(API_KEY_HEADER)) -> None:
-    """Validate admin API key."""
-    if api_key != settings.admin_api_key:
+    """Validate admin API key.
+
+    Uses constant-time comparison to prevent timing side-channel attacks
+    that could allow an attacker to guess the admin key byte-by-byte.
+    """
+    if not secrets.compare_digest(api_key, settings.admin_api_key):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required",

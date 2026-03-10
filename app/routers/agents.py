@@ -13,6 +13,10 @@ router = APIRouter(prefix="/agents", tags=["agents"])
 
 @router.post("", response_model=AgentCreateResponse, status_code=201)
 async def register_agent(body: AgentCreate, db: AsyncSession = Depends(get_db)):
+    # SECURITY NOTE: This endpoint is intentionally unauthenticated so that
+    # MCP workflow tools (setup_my_agent) can self-register agents.  If the
+    # server is exposed to untrusted networks, consider adding admin auth or
+    # rate-limiting to prevent abuse (e.g. mass agent creation).
     # Check uniqueness
     existing = await db.execute(select(Agent).where(Agent.name == body.name))
     if existing.scalar_one_or_none():
