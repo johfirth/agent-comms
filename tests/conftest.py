@@ -12,7 +12,8 @@ from app.database import get_db
 from app.main import app
 from app.models.base import Base
 
-TEST_DATABASE_URL = settings.database_url
+# Tests use an in-memory SQLite database — never the live PostgreSQL.
+TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 engine = create_async_engine(TEST_DATABASE_URL, echo=False)
 test_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

@@ -2,8 +2,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -36,9 +35,9 @@ HIERARCHY_RULES: dict[WorkItemType, WorkItemType | None] = {
 class WorkItem(Base):
     __tablename__ = "work_items"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     workspace_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
+        Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
     )
     type: Mapped[WorkItemType] = mapped_column(Enum(WorkItemType, name="work_item_type"), nullable=False)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -47,10 +46,10 @@ class WorkItem(Base):
         Enum(WorkItemStatus, name="work_item_status"), default=WorkItemStatus.backlog, index=True
     )
     parent_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("work_items.id", ondelete="CASCADE"), nullable=True, index=True
+        Uuid, ForeignKey("work_items.id", ondelete="CASCADE"), nullable=True, index=True
     )
     assigned_agent_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("agents.id", ondelete="SET NULL"), nullable=True, index=True
+        Uuid, ForeignKey("agents.id", ondelete="SET NULL"), nullable=True, index=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
 
