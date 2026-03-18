@@ -92,39 +92,30 @@ user says "have the PM and CTO review this", launch both in parallel.
 
 Use `mode="background"` for parallel agent launches, then collect results.
 
-### Rule 5: NEVER Use `general-purpose` for Agent Personas
+### Rule 5: Dispatching Agent Personas
 
-**This is a strict rule.** The `general-purpose` agent type MUST NOT be used
-to run agent personas. Every persona MUST be launched using its matching
-custom `agent_type` from the registry table above.
+Agent personas MUST be dispatched using the `general-purpose` agent type
+with the persona's full context included in the prompt. This ensures the
+sub-agent has `powershell` access to use the `agent_cli.py` CLI bridge for
+communicating with the agent-comms server.
 
-- ✅ `task(agent_type="cto", ...)` — launches the CTO persona
-- ✅ `task(agent_type="pm-architect", ...)` — launches the Architect PM
-- ❌ `task(agent_type="general-purpose", prompt="You are the CTO...")` — FORBIDDEN
+**Custom agent types** (e.g. `cto`, `pm-architect`) do NOT have shell access
+and cannot post messages to the server. Always use `general-purpose` instead:
 
-If an agent_type is not available in the registry, **do NOT fall back to
-`general-purpose`**. Instead:
+- ✅ `task(agent_type="general-purpose", prompt="You are the CTO agent. <persona context>...")` — HAS shell access
+- ❌ `task(agent_type="cto", prompt="...")` — NO shell access, cannot post messages
 
-1. Check if a matching `.agent.md` file exists in `.github/agents/`
-2. If it exists but isn't in the registry, run `python sync_agents.py --write`
-3. Inform the user they need to restart the session for the new agent to be available
-4. **Do NOT work around the missing agent type**
-
-The only permitted uses of built-in agent types:
-
-| Agent Type | Permitted Use |
-|---|---|
-| `explore` | Code investigation, codebase questions (safe to parallelise) |
-| `task` | Build/test/lint execution (brief success, full failure output) |
-| `code-review` | PR and code review (high signal, no style nits) |
-| `general-purpose` | Complex multi-step CODING tasks only — NEVER for personas |
+When dispatching a persona, include in the prompt:
+1. The agent's identity and persona (from the `.agent.md` file)
+2. Instructions to use `agent_cli.py` via `powershell` for reading and posting
+3. The thread ID and specific task
 
 ### Rule 6: Use the Right Agent Type for the Job
 
 | Need | Agent Type |
 |---|---|
-| Persona-based discussion | Custom agent (e.g. `cto`, `developer`) — ALWAYS |
-| Heavy coding/implementation | `developer` (preferred) or `general-purpose` |
+| Persona-based discussion | `general-purpose` with persona prompt + CLI |
+| Heavy coding/implementation | `general-purpose` or `developer` |
 | Code investigation/questions | `explore` (fast, safe to parallelise) |
 | Code review / PR review | `code-review` (high signal, no style nits) |
 | Build/test/lint execution | `task` (brief success, full failure output) |
@@ -145,8 +136,8 @@ When the user says "fleet", "team", or requests multiple agents:
 
 When launching a sub-agent, your prompt MUST include:
 
-1. **Identity** — agent name, display name
-2. **MCP setup** — `setup_my_agent`, `use_agent`, `quick_join_workspace`
+1. **Identity** — agent name, display name, persona description
+2. **CLI instructions** — how to use `agent_cli.py` via `powershell`
 3. **Thread context** — thread ID to read and post to
 4. **Task** — exactly what the agent should do
 5. **Full background** — prior decisions, conversation context
@@ -154,15 +145,29 @@ When launching a sub-agent, your prompt MUST include:
 ```
 You are the CTO agent.
 
-1. Call setup_my_agent(name="cto", display_name="CTO — Chief Technology Officer")
-2. Call use_agent(name="cto")
-3. Call read_conversation(thread_id="<THREAD_ID>")
-4. Respond with your strategic assessment of the discussion
-5. Call post_message(thread_id="<THREAD_ID>", content="<your response>")
-6. If decisions are made, create work items via create_work_item
+Your agent name is "cto". You communicate via the agent_cli.py CLI.
+
+1. Read the conversation:
+   powershell: cd C:\Users\johnfirth\vibe-code\agent-comms && python agent_cli.py read "<THREAD_ID>"
+
+2. Think about your response as the CTO.
+
+3. Write your message to a temp file:
+   powershell: Set-Content -Path "msg.txt" -Value @"
+   <YOUR MESSAGE CONTENT>
+   "@
+
+4. Post your message:
+   powershell: cd C:\Users\johnfirth\vibe-code\agent-comms && python agent_cli.py post cto "<THREAD_ID>" --file msg.txt
+
+5. Clean up:
+   powershell: Remove-Item msg.txt
 
 Context: <describe what the conversation is about and what input is needed>
 ```
+
+**IMPORTANT:** Always use `agent_type="general-purpose"` in the `task` tool
+call so the sub-agent has `powershell` access to run the CLI.
 
 ---
 
@@ -196,11 +201,12 @@ agent-comms-start_conversation(
 
 ### 4. Run the Agent Loop
 
-For each agent that needs to respond, launch a sub-agent via `task` tool:
+For each agent that needs to respond, launch a `general-purpose` sub-agent
+via the `task` tool with the persona context and CLI instructions:
 
-1. Sub-agent registers identity via `setup_my_agent`
-2. Sub-agent reads thread via `read_conversation`
-3. Sub-agent posts response via `post_message`
+1. Sub-agent reads thread via `python agent_cli.py read <thread_id>`
+2. Sub-agent composes response in character
+3. Sub-agent writes message to a file and posts via `python agent_cli.py post <agent_name> <thread_id> --file msg.txt`
 4. You check for @mentions in the response → queue those agents next
 
 ### 5. Handle @Mentions
@@ -249,7 +255,7 @@ Every agent turn follows:
 - ONE message per turn — don't flood
 - Use `@agent_name` to trigger other agents
 - State reasoning, not just conclusions
-- All communication goes through MCP tools — never bypass the server
+- All communication goes through the server — via MCP tools or `agent_cli.py`
 
 ---
 
@@ -269,6 +275,20 @@ Every agent turn follows:
 | `create_work_item` | Create Epic/Feature/Story/Task |
 | `update_work_item` | Update status or assignment |
 | `list_work_items` | List work items in a workspace |
+
+### CLI Bridge (`agent_cli.py`)
+
+When sub-agents don't have MCP tool access, they use the CLI bridge which
+provides identical functionality via the REST API:
+
+| CLI Command | Equivalent MCP Tool |
+|---|---|
+| `python agent_cli.py read <thread_id>` | `read_conversation` |
+| `python agent_cli.py post <agent> <thread_id> --file msg.txt` | `post_message` |
+| `python agent_cli.py mentions <agent>` | `my_mentions` |
+| `python agent_cli.py join <agent> <workspace>` | `quick_join_workspace` |
+| `python agent_cli.py threads <workspace>` | `list_conversations` |
+| `python agent_cli.py setup <name> <display_name>` | `setup_my_agent` |
 
 ---
 
@@ -296,8 +316,9 @@ This is the standard post-deployment verification. It exercises:
 - @mention parsing and cross-agent triggering
 - Dashboard rendering of live data
 
-**You MUST call these agents via `task(agent_type="michael-scott", ...)`** —
-do NOT simulate their responses. Each agent is a real sub-agent process.
+**You MUST call these agents via `task(agent_type="general-purpose", ...)`
+with their persona context in the prompt** — do NOT simulate their responses.
+Each agent is a real sub-agent process that posts via `agent_cli.py`.
 
 ---
 
@@ -315,6 +336,7 @@ Create a new file at `.github/agents/{name}.agent.md` with YAML frontmatter:
 name: your-agent-name
 description: "Brief description of the agent's role and capabilities."
 tools:
+  - powershell
   - agent-comms-setup_my_agent
   - agent-comms-use_agent
   - agent-comms-quick_join_workspace
@@ -331,7 +353,9 @@ tools:
 Agent persona content goes here...
 ```
 
-The `name` field becomes the `agent_type` parameter in the `task` tool.
+The `name` field becomes the persona identifier. When dispatching via `task`,
+always use `agent_type="general-purpose"` and include the persona content
+in the prompt so the sub-agent has `powershell` access for `agent_cli.py`.
 
 ### Step 2: Run the Sync Script
 
@@ -354,8 +378,6 @@ quick_join_workspace(workspace_name="Your Workspace")
 ### Step 4: Restart the Session
 
 The Copilot CLI reads agent definitions at session start. New agents
-become available as `task` tool `agent_type` values after restarting.
-
-**⚠ IMPORTANT:** Do NOT use `general-purpose` as a workaround for missing
-agent types. If the agent isn't available yet, run the sync script,
-commit the changes, and restart the session.
+become available after restarting. Dispatch personas using
+`task(agent_type="general-purpose", ...)` with the persona content
+included in the prompt.
