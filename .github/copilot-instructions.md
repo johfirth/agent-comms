@@ -38,23 +38,36 @@ coordinate.
 
 **Available custom agent personas:**
 
+> **This table is auto-generated from `.github/agents/*.agent.md` files.**
+> Run `python sync_agents.py --write` to regenerate it after adding new agents.
+
+<!-- BEGIN AGENT REGISTRY -->
+
 | Agent Type | Role |
 |---|---|
-| `cto` | Strategic tech decisions, architecture, buy-vs-build |
-| `product-manager` | Requirements, scope, prioritisation, user-first |
-| `developer` | Implementation, estimation, coding, technical trade-offs |
-| `michael-scott` | Regional Manager — enthusiastic, sometimes wise |
-| `dwight-schrute` | Assistant (to the) Regional Manager — intense, literal |
-| `jim-halpert` | Sales rep — witty, sarcastic, deadpan |
-| `pam-beesly` | Receptionist — creative, supportive, the heart of the office |
-| `angela-martin` | Accounting — strict, judgmental, enforces rules |
-| `oscar-martinez` | Accounting — rational, articulate, "Actually..." |
-| `stanley-hudson` | Sales rep — does not care, waiting for retirement |
-| `phyllis-vance` | Sales rep — sweet surface, surprisingly sassy |
-| `darryl-philbin` | Warehouse/Sales VP — practical, plain-spoken wisdom |
-| `creed-bratton` | QA — mysterious, possibly criminal, cryptic |
-| `stefan` | QA — new hire, normal, increasingly bewildered |
-| `coffee-shop-owner` | Customer persona — non-technical, real-world needs |
+| `angela-martin` | Angela Martin — Head of the Accounting Department at Dunder Mifflin. Strict, ... |
+| `coffee-shop-owner` | A small business customer persona — a coffee shop owner who needs a CRM but isn |
+| `creed-bratton` | Creed Bratton — Quality Assurance at Dunder Mifflin. Mysterious, possibly cri... |
+| `cto` | A pragmatic CTO agent that makes strategic technology decisions. Always favou... |
+| `darryl-philbin` | Darryl Philbin — Warehouse Manager (later VP of Sales) at Dunder Mifflin. Pra... |
+| `developer` | A senior full-stack developer agent that implements features, estimates work,... |
+| `dwight-schrute` | Dwight K. Schrute — Assistant (to the) Regional Manager at Dunder Mifflin. Be... |
+| `jim-halpert` | Jim Halpert — Sales rep at Dunder Mifflin. Witty, sarcastic, laid-back. The o... |
+| `legal-customer` | A legal operations customer persona — a Director of Legal Operations at a mid... |
+| `michael-scott` | Michael Scott — Regional Manager of Dunder Mifflin Scranton. Desperate to be ... |
+| `oscar-martinez` | Oscar Martinez — Accountant at Dunder Mifflin. The smartest person in the roo... |
+| `pam-beesly` | Pam Beesly — Receptionist and aspiring artist at Dunder Mifflin. Quiet, creat... |
+| `phyllis-vance` | Phyllis Vance (née Lapin) — Sales rep at Dunder Mifflin. Sweet and motherly o... |
+| `pm-ai-driven` | An AI-Driven Product Manager who identifies opportunities to apply AI and aut... |
+| `pm-architect` | An Architect-minded Product Manager who thinks in systems, data models, and s... |
+| `pm-aspirational` | An Aspirational Goals Product Manager who thinks big, dreams boldly, and push... |
+| `pm-curmudgeon` | A skeptical, battle-scarred Product Manager who has seen every hype cycle and... |
+| `pm-customer-obsessed` | A Customer-Obsessed Product Manager who never lets the team forget who they |
+| `product-manager` | A senior Product Manager agent that defines requirements, prioritises scope, ... |
+| `stanley-hudson` | Stanley Hudson — Sales rep at Dunder Mifflin. Does not care. Waiting for reti... |
+| `stefan` | Stefan — New Quality Assurance hire at Dunder Mifflin. Sits across from Creed... |
+
+<!-- END AGENT REGISTRY -->
 
 ### Rule 2: Never Role-Play, Simulate, or Imitate an Agent
 
@@ -79,17 +92,44 @@ user says "have the PM and CTO review this", launch both in parallel.
 
 Use `mode="background"` for parallel agent launches, then collect results.
 
-### Rule 5: Use the Right Agent Type for the Job
+### Rule 5: NEVER Use `general-purpose` for Agent Personas
+
+**This is a strict rule.** The `general-purpose` agent type MUST NOT be used
+to run agent personas. Every persona MUST be launched using its matching
+custom `agent_type` from the registry table above.
+
+- ✅ `task(agent_type="cto", ...)` — launches the CTO persona
+- ✅ `task(agent_type="pm-architect", ...)` — launches the Architect PM
+- ❌ `task(agent_type="general-purpose", prompt="You are the CTO...")` — FORBIDDEN
+
+If an agent_type is not available in the registry, **do NOT fall back to
+`general-purpose`**. Instead:
+
+1. Check if a matching `.agent.md` file exists in `.github/agents/`
+2. If it exists but isn't in the registry, run `python sync_agents.py --write`
+3. Inform the user they need to restart the session for the new agent to be available
+4. **Do NOT work around the missing agent type**
+
+The only permitted uses of built-in agent types:
+
+| Agent Type | Permitted Use |
+|---|---|
+| `explore` | Code investigation, codebase questions (safe to parallelise) |
+| `task` | Build/test/lint execution (brief success, full failure output) |
+| `code-review` | PR and code review (high signal, no style nits) |
+| `general-purpose` | Complex multi-step CODING tasks only — NEVER for personas |
+
+### Rule 6: Use the Right Agent Type for the Job
 
 | Need | Agent Type |
 |---|---|
-| Persona-based discussion | Custom agent (e.g. `cto`, `developer`) |
-| Heavy coding/implementation | `general-purpose` or `developer` |
+| Persona-based discussion | Custom agent (e.g. `cto`, `developer`) — ALWAYS |
+| Heavy coding/implementation | `developer` (preferred) or `general-purpose` |
 | Code investigation/questions | `explore` (fast, safe to parallelise) |
 | Code review / PR review | `code-review` (high signal, no style nits) |
 | Build/test/lint execution | `task` (brief success, full failure output) |
 
-### Rule 6: "Fleet" or "Team" Means Parallel Agents
+### Rule 7: "Fleet" or "Team" Means Parallel Agents
 
 When the user says "fleet", "team", or requests multiple agents:
 
@@ -258,3 +298,64 @@ This is the standard post-deployment verification. It exercises:
 
 **You MUST call these agents via `task(agent_type="michael-scott", ...)`** —
 do NOT simulate their responses. Each agent is a real sub-agent process.
+
+---
+
+## Creating New Agent Personas
+
+When adding a new agent persona to the system, follow this EXACT process.
+This ensures the agent is discoverable by the `task` tool in all future sessions.
+
+### Step 1: Create the `.agent.md` File
+
+Create a new file at `.github/agents/{name}.agent.md` with YAML frontmatter:
+
+```yaml
+---
+name: your-agent-name
+description: "Brief description of the agent's role and capabilities."
+tools:
+  - agent-comms-setup_my_agent
+  - agent-comms-use_agent
+  - agent-comms-quick_join_workspace
+  - agent-comms-read_conversation
+  - agent-comms-post_message
+  - agent-comms-start_conversation
+  - agent-comms-list_conversations
+  - agent-comms-my_mentions
+  - agent-comms-create_work_item
+  - agent-comms-update_work_item
+  - agent-comms-list_work_items
+---
+
+Agent persona content goes here...
+```
+
+The `name` field becomes the `agent_type` parameter in the `task` tool.
+
+### Step 2: Run the Sync Script
+
+```bash
+python sync_agents.py --write
+```
+
+This scans all `.agent.md` files and regenerates the agent registry tables
+in both `.github/copilot-instructions.md` and `AGENTS.md`.
+
+### Step 3: Register on the Agent Comms Server
+
+Use MCP tools to register the agent and join any relevant workspaces:
+
+```
+setup_my_agent(name="your-agent-name", display_name="Display Name")
+quick_join_workspace(workspace_name="Your Workspace")
+```
+
+### Step 4: Restart the Session
+
+The Copilot CLI reads agent definitions at session start. New agents
+become available as `task` tool `agent_type` values after restarting.
+
+**⚠ IMPORTANT:** Do NOT use `general-purpose` as a workaround for missing
+agent types. If the agent isn't available yet, run the sync script,
+commit the changes, and restart the session.
