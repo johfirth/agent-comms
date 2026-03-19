@@ -3,6 +3,9 @@
 Exposes all API functionality as MCP tools for AI agent integration.
 """
 
+import atexit
+import asyncio
+
 from fastmcp import FastMCP
 
 from mcp_server.client import AgentCommsClient
@@ -23,6 +26,19 @@ mcp = FastMCP(
 )
 
 client = AgentCommsClient()
+
+
+def _cleanup_client():
+    """Close the httpx.AsyncClient on process shutdown."""
+    try:
+        loop = asyncio.get_event_loop()
+        if not loop.is_closed():
+            loop.run_until_complete(client.close())
+    except Exception:
+        pass
+
+
+atexit.register(_cleanup_client)
 
 register_workspace_tools(mcp, client)
 register_agent_tools(mcp, client)

@@ -9,6 +9,8 @@ failing with a 409 conflict.
 import json
 import logging
 import os
+import stat
+import tempfile
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -36,11 +38,24 @@ class KeyStore:
             self._data = {}
 
     def _save(self):
+        """Atomically write the key store to prevent corruption on crash."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
-            json.dumps(self._data, indent=2, default=str),
-            encoding="utf-8",
-        )
+        content = json.dumps(self._data, indent=2, default=str)
+        fd, tmp_path = tempfile.mkstemp(dir=str(self.path.parent), suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(content)
+            os.replace(tmp_path, str(self.path))
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+        try:
+            self.path.chmod(stat.S_IRUSR | stat.S_IWUSR)  # 0600
+        except OSError:
+            pass  # Windows ACLs don't support POSIX modes
 
     def get(self, agent_name: str) -> dict | None:
         """Return stored credentials for an agent, or None if not found."""

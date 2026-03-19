@@ -24,10 +24,12 @@ import sys
 
 import httpx
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-KEYS_FILE = os.path.join(SCRIPT_DIR, "agents", "keys.json")
+from agents.key_store import KeyStore
+
 BASE_URL = os.environ.get("AGENT_COMMS_URL", "http://localhost:8000")
 ADMIN_KEY = os.environ.get("AGENT_COMMS_ADMIN_KEY", "admin-dev-key-change-me")
+
+_key_store = KeyStore()
 
 
 def _out(data):
@@ -41,26 +43,14 @@ def _err(msg, exit_code=1):
     sys.exit(exit_code)
 
 
-def load_keys():
-    if not os.path.exists(KEYS_FILE):
-        return {}
-    with open(KEYS_FILE, encoding="utf-8") as f:
-        return json.load(f)
-
-
-def save_keys(keys):
-    os.makedirs(os.path.dirname(KEYS_FILE), exist_ok=True)
-    with open(KEYS_FILE, "w", encoding="utf-8") as f:
-        json.dump(keys, f, indent=2)
-
-
 def get_agent(agent_name):
-    """Look up agent credentials from keys.json."""
-    keys = load_keys()
-    if agent_name not in keys:
+    """Look up agent credentials from the shared key store."""
+    saved = _key_store.get(agent_name)
+    if not saved:
+        available = sorted(_key_store.list_agents().keys())
         _err(f"Agent '{agent_name}' not found in keys.json. "
-             f"Available: {', '.join(sorted(keys.keys()))}")
-    return keys[agent_name]
+             f"Available: {', '.join(available)}")
+    return saved
 
 
 def _headers(api_key):
@@ -86,18 +76,17 @@ def _find_workspace(name):
 
 def cmd_setup(args):
     """Register or recover agent credentials."""
-    keys = load_keys()
+    saved = _key_store.get(args.name)
 
-    if args.name in keys:
-        agent = keys[args.name]
+    if saved:
         try:
-            r = httpx.get(f"{BASE_URL}/agents/{agent['id']}", timeout=10)
+            r = httpx.get(f"{BASE_URL}/agents/{saved['id']}", timeout=10)
             if r.status_code == 200:
                 _out({
                     "status": "recovered",
-                    "agent_id": agent["id"],
+                    "agent_id": saved["id"],
                     "name": args.name,
-                    "display_name": agent.get("display_name", ""),
+                    "display_name": saved.get("display_name", ""),
                 })
                 return
         except Exception:
@@ -111,12 +100,7 @@ def cmd_setup(args):
         )
         if r.status_code == 201:
             data = r.json()
-            keys[args.name] = {
-                "id": data["id"],
-                "api_key": data["api_key"],
-                "display_name": args.display_name,
-            }
-            save_keys(keys)
+            _key_store.save_agent(args.name, data["id"], data["api_key"], args.display_name)
             _out({"status": "registered", "agent_id": data["id"], "name": args.name})
         elif r.status_code == 409:
             _err(f"Agent name '{args.name}' already taken on server")
@@ -161,8 +145,11 @@ def cmd_post(args):
 
     # Resolve content: --file > --stdin > positional arg
     if args.file:
-        with open(args.file, "r", encoding="utf-8") as f:
-            content = f.read()
+        try:
+            with open(args.file, "r", encoding="utf-8") as f:
+                content = f.read()
+        except (FileNotFoundError, OSError) as e:
+            _err(f"Cannot read file '{args.file}': {e}")
     elif args.stdin:
         content = sys.stdin.read()
     elif args.content:
@@ -206,18 +193,20 @@ def cmd_join(args):
 
     try:
         # Request to join
-        httpx.post(
+        r = httpx.post(
             f"{BASE_URL}/workspaces/{ws_id}/join",
             headers=_headers(agent["api_key"]),
             timeout=10,
         )
+        r.raise_for_status()
         # Auto-approve via admin
-        httpx.patch(
+        r = httpx.patch(
             f"{BASE_URL}/workspaces/{ws_id}/members/{agent['id']}",
             json={"status": "approved", "approved_by": "auto"},
             headers=_admin_headers(),
             timeout=10,
         )
+        r.raise_for_status()
         _out({
             "status": "joined",
             "workspace_id": ws_id,

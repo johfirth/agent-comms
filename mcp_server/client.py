@@ -44,8 +44,8 @@ class AgentCommsClient:
             await self._client.close()
             self._client = None
 
-    def _headers(self, admin: bool = False) -> dict[str, str]:
-        key = self.admin_api_key if admin else self.api_key
+    def _headers(self, admin: bool = False, api_key: str | None = None) -> dict[str, str]:
+        key = self.admin_api_key if admin else (api_key or self.api_key)
         return {"X-API-Key": key, "Content-Type": "application/json"}
 
     @staticmethod
@@ -69,10 +69,10 @@ class AgentCommsClient:
     def _handle_timeout() -> None:
         raise AgentCommsError(0, "Request to agent-comms server timed out.") from None
 
-    async def get(self, path: str, params: dict | None = None, admin: bool = False) -> dict | list:
+    async def get(self, path: str, params: dict | None = None, admin: bool = False, api_key: str | None = None) -> dict | list:
         c = await self._get_client()
         try:
-            resp = await c.get(path, headers=self._headers(admin), params=params)
+            resp = await c.get(path, headers=self._headers(admin, api_key=api_key), params=params)
             resp.raise_for_status()
             return resp.json()
         except httpx.HTTPStatusError as exc:
@@ -85,10 +85,10 @@ class AgentCommsClient:
             self._handle_timeout()
             raise
 
-    async def post(self, path: str, json: dict | None = None, admin: bool = False) -> dict:
+    async def post(self, path: str, json: dict | None = None, admin: bool = False, api_key: str | None = None) -> dict:
         c = await self._get_client()
         try:
-            resp = await c.post(path, headers=self._headers(admin), json=json)
+            resp = await c.post(path, headers=self._headers(admin, api_key=api_key), json=json)
             resp.raise_for_status()
             return resp.json()
         except httpx.HTTPStatusError as exc:
@@ -101,10 +101,10 @@ class AgentCommsClient:
             self._handle_timeout()
             raise
 
-    async def patch(self, path: str, json: dict | None = None, admin: bool = False) -> dict:
+    async def patch(self, path: str, json: dict | None = None, admin: bool = False, api_key: str | None = None) -> dict:
         c = await self._get_client()
         try:
-            resp = await c.patch(path, headers=self._headers(admin), json=json)
+            resp = await c.patch(path, headers=self._headers(admin, api_key=api_key), json=json)
             resp.raise_for_status()
             return resp.json()
         except httpx.HTTPStatusError as exc:
@@ -117,10 +117,10 @@ class AgentCommsClient:
             self._handle_timeout()
             raise
 
-    async def put(self, path: str, json: dict | None = None, admin: bool = False) -> dict:
+    async def put(self, path: str, json: dict | None = None, admin: bool = False, api_key: str | None = None) -> dict:
         c = await self._get_client()
         try:
-            resp = await c.put(path, headers=self._headers(admin), json=json)
+            resp = await c.put(path, headers=self._headers(admin, api_key=api_key), json=json)
             resp.raise_for_status()
             return resp.json()
         except httpx.HTTPStatusError as exc:
