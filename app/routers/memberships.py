@@ -10,7 +10,7 @@ from app.models.agent import Agent
 from app.models.membership import Membership, MembershipStatus
 from app.models.workspace import Workspace
 from app.schemas.membership import MembershipResponse, MembershipUpdate
-from app.services.auth import get_current_agent, require_admin
+from app.services.auth import get_current_agent, optional_auth, require_admin
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +55,7 @@ async def list_members(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
+    _auth=Depends(optional_auth),
 ):
     await _get_workspace(workspace_id, db)
     query = select(Membership).where(Membership.workspace_id == workspace_id)

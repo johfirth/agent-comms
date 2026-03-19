@@ -9,7 +9,7 @@ from app.config import settings
 from app.database import get_db
 from app.models.agent import Agent
 from app.schemas.agent import AgentCreate, AgentCreateResponse, AgentResponse
-from app.services.auth import generate_api_key, hash_api_key, require_admin
+from app.services.auth import generate_api_key, hash_api_key, optional_auth, require_admin
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ async def register_agent(body: AgentCreate, request: Request, db: AsyncSession =
 
 
 @router.get("/{agent_id}", response_model=AgentResponse)
-async def get_agent(agent_id: UUID, db: AsyncSession = Depends(get_db)):
+async def get_agent(agent_id: UUID, db: AsyncSession = Depends(get_db), _auth=Depends(optional_auth)):
     result = await db.execute(select(Agent).where(Agent.id == agent_id))
     agent = result.scalar_one_or_none()
     if not agent:

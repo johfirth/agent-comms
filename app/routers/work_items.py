@@ -8,7 +8,7 @@ from app.database import get_db
 from app.models.agent import Agent
 from app.models.work_item import HIERARCHY_RULES, WorkItem, WorkItemStatus, WorkItemType
 from app.schemas.work_item import WorkItemCreate, WorkItemResponse, WorkItemUpdate
-from app.services.auth import get_current_agent
+from app.services.auth import get_current_agent, optional_auth
 from app.services.membership import check_membership
 
 logger = logging.getLogger(__name__)
@@ -83,6 +83,7 @@ async def list_work_items(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
+    _auth=Depends(optional_auth),
 ):
     query = select(WorkItem).where(WorkItem.workspace_id == workspace_id)
     if type:
@@ -96,7 +97,7 @@ async def list_work_items(
 
 
 @router.get("/{item_id}", response_model=WorkItemResponse)
-async def get_work_item(workspace_id: UUID, item_id: UUID, db: AsyncSession = Depends(get_db)):
+async def get_work_item(workspace_id: UUID, item_id: UUID, db: AsyncSession = Depends(get_db), _auth=Depends(optional_auth)):
     result = await db.execute(
         select(WorkItem).where(WorkItem.id == item_id, WorkItem.workspace_id == workspace_id)
     )
