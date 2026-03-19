@@ -34,6 +34,12 @@ def _is_safe_url(url: str) -> bool:
         addr_info = socket.getaddrinfo(hostname, None)
         for family, _, _, _, sockaddr in addr_info:
             ip = ipaddress.ip_address(sockaddr[0])
+            # Unwrap IPv4-mapped IPv6 addresses (e.g. ::ffff:127.0.0.1 → 127.0.0.1)
+            if hasattr(ip, 'ipv4_mapped') and ip.ipv4_mapped:
+                ip = ip.ipv4_mapped
+            # Block unspecified addresses (0.0.0.0 and ::)
+            if ip.is_unspecified:
+                return False
             for network in BLOCKED_NETWORKS:
                 if ip in network:
                     return False

@@ -6,6 +6,7 @@ The key store persists agent credentials locally so agents survive across sessio
 """
 
 import logging
+from contextvars import ContextVar
 from typing import Annotated
 
 from fastmcp import FastMCP
@@ -21,16 +22,15 @@ _key_store = KeyStore()
 # Active agent API key for the current session.
 # Set by setup_my_agent / use_agent.  Passed per-request to avoid
 # relying solely on mutable client.api_key (see issue #7).
-_active_api_key: str | None = None
+_active_api_key: ContextVar[str | None] = ContextVar('_active_api_key', default=None)
 
 
 def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
     """Register high-level workflow tools for easy Copilot CLI usage."""
 
     def _set_active_key(api_key: str):
-        """Set the active agent key for this session."""
-        global _active_api_key
-        _active_api_key = api_key
+        """Set the active agent key for this async context."""
+        _active_api_key.set(api_key)
         # Also set on client for backward compat with non-workflow tools
         # (e.g. post_message in threads.py).  TODO(#7): remove once all
         # tool modules accept per-request api_key.
@@ -56,7 +56,7 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
         if saved:
             _set_active_key(saved["api_key"])
             try:
-                agent_data = await client.get(f"/agents/{saved['id']}", api_key=_active_api_key)
+                agent_data = await client.get(f"/agents/{saved['id']}", api_key=_active_api_key.get())
                 return {
                     "status": "recovered",
                     "message": f"Welcome back, {display_name}! Using saved credentials.",
@@ -77,6 +77,13 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
                     }
                 except Exception as e:
                     logger.warning("Key regeneration failed for %s: %s", name, e)
+                    return {
+                        "status": "error",
+                        "message": (
+                            f"Saved credentials for '{name}' are invalid and key regeneration failed. "
+                            f"Admin intervention required: POST /agents/{saved['id']}/regenerate-key"
+                        ),
+                    }
 
         # Fresh registration
         try:
@@ -176,7 +183,7 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
         After this, you can create threads and post messages in the workspace.
         """
         # Find existing workspace
-        workspaces = await client.get("/workspaces", api_key=_active_api_key)
+        workspaces = await client.get("/workspaces", api_key=_active_api_key.get())
         workspace = None
         for ws in workspaces:
             if ws["name"] == workspace_name:
@@ -195,7 +202,7 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
 
         # Try to join (might already be a member)
         try:
-            await client.post(f"/workspaces/{ws_id}/join", api_key=_active_api_key)
+            await client.post(f"/workspaces/{ws_id}/join", api_key=_active_api_key.get())
         except AgentCommsError as exc:
             if exc.status_code != 409:
                 raise
@@ -206,7 +213,7 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
         all_agents = _key_store.list_agents()
         agent_id = None
         for name, info in all_agents.items():
-            if info["api_key"] == _active_api_key:
+            if info["api_key"] == _active_api_key.get():
                 agent_id = info["id"]
                 break
 
@@ -245,7 +252,7 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
         messages = await client.get(
             f"/threads/{thread_id}/messages",
             params={"limit": max(1, min(limit, 200))},
-            api_key=_active_api_key,
+            api_key=_active_api_key.get(),
         )
 
         formatted = []
@@ -280,7 +287,7 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
         After this, other agents can read_conversation and respond.
         """
         # Find workspace
-        workspaces = await client.get("/workspaces", api_key=_active_api_key)
+        workspaces = await client.get("/workspaces", api_key=_active_api_key.get())
         workspace = None
         for ws in workspaces:
             if ws["name"] == workspace_name:
@@ -296,13 +303,13 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
         body = {"title": thread_title}
         if thread_description:
             body["description"] = thread_description
-        thread = await client.post(f"/workspaces/{ws_id}/threads", json=body, api_key=_active_api_key)
+        thread = await client.post(f"/workspaces/{ws_id}/threads", json=body, api_key=_active_api_key.get())
 
         # Post first message
         message = await client.post(
             f"/threads/{thread['id']}/messages",
             json={"content": first_message},
-            api_key=_active_api_key,
+            api_key=_active_api_key.get(),
         )
 
         return {
@@ -327,7 +334,7 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
         agent_id = None
         agent_name = None
         for name, info in all_agents.items():
-            if info["api_key"] == _active_api_key:
+            if info["api_key"] == _active_api_key.get():
                 agent_id = info["id"]
                 agent_name = name
                 break
@@ -338,13 +345,13 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
         params = {"agent_id": agent_id}
 
         if workspace_name:
-            workspaces = await client.get("/workspaces", api_key=_active_api_key)
+            workspaces = await client.get("/workspaces", api_key=_active_api_key.get())
             for ws in workspaces:
                 if ws["name"] == workspace_name:
                     params["workspace_id"] = ws["id"]
                     break
 
-        mentions = await client.get("/mentions", params=params, api_key=_active_api_key)
+        mentions = await client.get("/mentions", params=params, api_key=_active_api_key.get())
 
         return {
             "agent": agent_name,
@@ -362,7 +369,7 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
         Returns thread titles, IDs, and message counts so you can find
         conversations to join or continue.
         """
-        workspaces = await client.get("/workspaces", api_key=_active_api_key)
+        workspaces = await client.get("/workspaces", api_key=_active_api_key.get())
         workspace = None
         for ws in workspaces:
             if ws["name"] == workspace_name:
@@ -372,7 +379,7 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
         if not workspace:
             return {"status": "error", "message": f"Workspace '{workspace_name}' not found."}
 
-        threads = await client.get(f"/workspaces/{workspace['id']}/threads", api_key=_active_api_key)
+        threads = await client.get(f"/workspaces/{workspace['id']}/threads", api_key=_active_api_key.get())
 
         return {
             "workspace": workspace_name,

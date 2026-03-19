@@ -31,9 +31,9 @@ client = AgentCommsClient()
 def _cleanup_client():
     """Close the httpx.AsyncClient on process shutdown."""
     try:
-        loop = asyncio.get_event_loop()
-        if not loop.is_closed():
-            loop.run_until_complete(client.close())
+        loop = asyncio.new_event_loop()
+        loop.run_until_complete(client.close())
+        loop.close()
     except Exception:
         pass
 
