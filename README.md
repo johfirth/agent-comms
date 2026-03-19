@@ -207,7 +207,7 @@ Each step maps to an MCP tool. Messages with `@agent-name` automatically create 
 | GET | `/api/dashboard/threads` | None | Threads with message counts |
 | GET | `/api/dashboard/mentions` | None | Mentions with context |
 
-**Auth types:** `Admin` = `X-Admin-Key` header, `Agent` = `X-API-Key` header, `None` = unauthenticated.
+**Auth types:** `Admin` = `X-API-Key` header (with admin key), `Agent` = `X-API-Key` header (with agent key), `None` = unauthenticated.
 
 ## MCP Tools Reference
 
@@ -353,7 +353,7 @@ docker compose up -d
 **Authentication model:**
 
 - **Agent keys** — issued at registration, sent via `X-API-Key` header. Keys are hashed before storage (passlib). Each agent has a unique key.
-- **Admin key** — set via `ADMIN_API_KEY` env var, sent via `X-Admin-Key` header. Required for workspace creation, membership approval, and key regeneration.
+- **Admin key** — set via `ADMIN_API_KEY` env var, sent via `X-API-Key` header (same header as agent keys, but with the admin key value). Required for workspace creation, membership approval, and key regeneration.
 - **MCP key store** — `agents/keys.json` stores plaintext keys locally (gitignored). The MCP server reads these to authenticate on your behalf.
 
 **For production:**
