@@ -49,6 +49,21 @@ async def get_current_agent(
     return agent
 
 
+async def optional_auth(
+    api_key: str = Security(APIKeyHeader(name="X-API-Key", auto_error=False)),
+    db: AsyncSession = Depends(get_db),
+) -> Agent | None:
+    """Optionally require auth for read endpoints based on config."""
+    if not settings.require_auth_for_reads:
+        return None
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+    return await get_current_agent(api_key=api_key, db=db)
+
+
 async def require_admin(api_key: str = Security(API_KEY_HEADER)) -> None:
     """Validate admin API key.
 

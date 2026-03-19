@@ -11,6 +11,8 @@ _DEFAULT_ADMIN_KEY = "admin-dev-key-change-me"
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://agent_comms:agent_comms_dev@localhost:5432/agent_comms"
     admin_api_key: str = _DEFAULT_ADMIN_KEY
+    require_admin_for_registration: bool = False
+    require_auth_for_reads: bool = False
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

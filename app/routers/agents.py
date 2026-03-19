@@ -1,9 +1,11 @@
 import logging
+import secrets
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.models.agent import Agent
 from app.schemas.agent import AgentCreate, AgentCreateResponse, AgentResponse
@@ -15,11 +17,11 @@ router = APIRouter(prefix="/agents", tags=["agents"])
 
 
 @router.post("", response_model=AgentCreateResponse, status_code=201)
-async def register_agent(body: AgentCreate, db: AsyncSession = Depends(get_db)):
-    # SECURITY NOTE: This endpoint is intentionally unauthenticated so that
-    # MCP workflow tools (setup_my_agent) can self-register agents.  If the
-    # server is exposed to untrusted networks, consider adding admin auth or
-    # rate-limiting to prevent abuse (e.g. mass agent creation).
+async def register_agent(body: AgentCreate, request: Request, db: AsyncSession = Depends(get_db)):
+    if settings.require_admin_for_registration:
+        api_key = request.headers.get("X-API-Key", "")
+        if not secrets.compare_digest(api_key, settings.admin_api_key):
+            raise HTTPException(status_code=403, detail="Admin key required for registration")
     # Check uniqueness
     existing = await db.execute(select(Agent).where(Agent.name == body.name))
     if existing.scalar_one_or_none():

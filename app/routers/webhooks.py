@@ -26,6 +26,10 @@ async def set_webhook(
     if current_agent.id != agent_id:
         raise HTTPException(status_code=403, detail="Can only update your own webhook URL")
     
+    from app.services.webhook import _is_safe_url
+    if not _is_safe_url(body.webhook_url):
+        raise HTTPException(status_code=400, detail="Webhook URL targets a blocked internal network")
+
     current_agent.webhook_url = body.webhook_url
     await db.commit()
     await db.refresh(current_agent)

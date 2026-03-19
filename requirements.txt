@@ -6,6 +6,7 @@ psycopg2-binary==2.9.10
 alembic==1.14.1
 pydantic-settings==2.7.1
 httpx==0.28.1
+slowapi==0.1.9
 passlib==1.7.4
 python-multipart==0.0.20
 fastmcp==3.1.0
