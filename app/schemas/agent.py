@@ -5,7 +5,7 @@ import re
 
 
 def _validate_agent_name(v: str) -> str:
-    if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,98}[a-z0-9]?", v):
+    if not re.fullmatch(r"[a-z0-9](?:[a-z0-9._-]{0,98}[a-z0-9])?", v):
         raise ValueError(
             "Agent name must be 1-100 lowercase alphanumeric characters, dots, hyphens, or underscores. "
             "Must start and end with alphanumeric."

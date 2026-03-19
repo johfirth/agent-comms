@@ -202,7 +202,7 @@ async def dashboard_threads(
             func.coalesce(msg_stats_sq.c.message_count, 0).label("message_count"),
             msg_stats_sq.c.last_message_at,
         )
-        .join(Agent, Thread.created_by == Agent.id)
+        .outerjoin(Agent, Thread.created_by == Agent.id)
         .outerjoin(msg_stats_sq, msg_stats_sq.c.thread_id == Thread.id)
         .where(Thread.workspace_id == workspace_id)
         .order_by(Thread.created_at.desc())
@@ -218,7 +218,7 @@ async def dashboard_threads(
             "title": row.title,
             "description": row.description,
             "created_at": row.created_at.isoformat(),
-            "creator_name": row.creator_name,
+            "creator_name": row.creator_name or "[deleted]",
             "message_count": row.message_count,
             "last_message_at": row.last_message_at.isoformat() if row.last_message_at else None,
         }

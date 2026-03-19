@@ -125,8 +125,12 @@ async def update_work_item(
     update_data = body.model_dump(exclude_unset=True)
     if "assigned_agent_id" in update_data:
         await _validate_assigned_agent(db, update_data["assigned_agent_id"])
+    if "status" in update_data:
+        update_data["status"] = WorkItemStatus(update_data["status"])
+    ALLOWED_FIELDS = {"title", "description", "status", "assigned_agent_id"}
     for field, value in update_data.items():
-        setattr(item, field, value)
+        if field in ALLOWED_FIELDS:
+            setattr(item, field, value)
     
     await db.commit()
     await db.refresh(item)

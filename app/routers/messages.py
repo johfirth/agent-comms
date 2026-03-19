@@ -1,6 +1,6 @@
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -53,12 +53,22 @@ async def create_message(
                 "event": "mention",
                 "thread_id": str(thread_id),
                 "message_id": str(message.id),
+                "workspace_id": str(thread.workspace_id),
                 "author": agent.name,
                 "content": body.content,
+                "created_at": message.created_at.isoformat(),
             },
         )
     
-    return message
+    return MessageResponse(
+        id=message.id,
+        thread_id=message.thread_id,
+        author_id=message.author_id,
+        author_name=agent.name,
+        content=message.content,
+        created_at=message.created_at,
+        updated_at=message.updated_at,
+    )
 
 
 @router.get("", response_model=list[MessageResponse])
@@ -73,7 +83,7 @@ async def list_messages(
         select(Message, Agent.name)
         .join(Agent, Message.author_id == Agent.id)
         .where(Message.thread_id == thread_id)
-        .order_by(Message.created_at.asc())
+        .order_by(Message.created_at.asc(), Message.id.asc())
         .limit(limit)
         .offset(offset)
     )

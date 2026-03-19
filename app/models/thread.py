@@ -19,8 +19,8 @@ class Thread(Base):
     work_item_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("work_items.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    created_by: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("agents.id"), nullable=False, index=True
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("agents.id", ondelete="SET NULL"), nullable=True, index=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
 

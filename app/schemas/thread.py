@@ -15,7 +15,7 @@ class ThreadResponse(BaseModel):
     title: str
     description: str | None
     work_item_id: UUID | None
-    created_by: UUID
+    created_by: UUID | None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
