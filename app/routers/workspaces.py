@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.workspace import Workspace
 from app.schemas.workspace import WorkspaceCreate, WorkspaceResponse
-from app.services.auth import require_admin
+from app.services.auth import optional_auth, require_admin
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,7 @@ async def list_workspaces(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
+    _auth=Depends(optional_auth),
 ):
     result = await db.execute(
         select(Workspace).order_by(Workspace.created_at.desc()).limit(limit).offset(offset)
@@ -43,7 +44,7 @@ async def list_workspaces(
 
 
 @router.get("/{workspace_id}", response_model=WorkspaceResponse)
-async def get_workspace(workspace_id: UUID, db: AsyncSession = Depends(get_db)):
+async def get_workspace(workspace_id: UUID, db: AsyncSession = Depends(get_db), _auth=Depends(optional_auth)):
     result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
     workspace = result.scalar_one_or_none()
     if not workspace:

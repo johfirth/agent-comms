@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from app.database import get_db
+from app.services.auth import optional_auth
 from app.models.agent import Agent
 from app.models.membership import Membership
 from app.models.mention import Mention
@@ -17,7 +18,7 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
 @router.get("/overview")
-async def dashboard_overview(db: AsyncSession = Depends(get_db)):
+async def dashboard_overview(db: AsyncSession = Depends(get_db), _auth=Depends(optional_auth)):
     """Workspace-level stats: totals and per-workspace breakdowns."""
 
     # Global counts
@@ -107,6 +108,7 @@ async def recent_messages(
     limit: int = Query(50, ge=1, le=200),
     workspace_id: UUID | None = Query(None),
     db: AsyncSession = Depends(get_db),
+    _auth=Depends(optional_auth),
 ):
     """Recent messages across all threads, with author and thread info joined."""
 
@@ -144,6 +146,7 @@ async def dashboard_work_items(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
+    _auth=Depends(optional_auth),
 ):
     """Work items in a workspace with assigned agent name."""
 
@@ -179,6 +182,7 @@ async def dashboard_threads(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
+    _auth=Depends(optional_auth),
 ):
     """Threads in a workspace with message count and last message time."""
 
@@ -231,6 +235,7 @@ async def dashboard_mentions(
     workspace_id: UUID | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
+    _auth=Depends(optional_auth),
 ):
     """Mentions with context: who was mentioned, by whom, and the message content."""
 

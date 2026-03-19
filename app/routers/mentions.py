@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.mention import Mention
 from app.schemas.mention import MentionResponse
+from app.services.auth import optional_auth
 
 router = APIRouter(prefix="/mentions", tags=["mentions"])
 
@@ -17,6 +18,7 @@ async def search_mentions(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
+    _auth=Depends(optional_auth),
 ):
     query = select(Mention).where(Mention.mentioned_agent_id == agent_id)
     if workspace_id:

@@ -8,7 +8,7 @@ from app.models.agent import Agent
 from app.models.message import Message
 from app.models.thread import Thread
 from app.schemas.message import MessageCreate, MessageResponse
-from app.services.auth import get_current_agent
+from app.services.auth import get_current_agent, optional_auth
 from app.services.membership import check_membership
 from app.services.mention import create_mentions_for_message
 from app.services.webhook import dispatch_mention_webhooks
@@ -77,6 +77,7 @@ async def list_messages(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
+    _auth=Depends(optional_auth),
 ):
     await _get_thread(thread_id, db)
     result = await db.execute(

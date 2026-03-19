@@ -8,7 +8,7 @@ from app.models.agent import Agent
 from app.models.thread import Thread
 from app.models.work_item import WorkItem
 from app.schemas.thread import ThreadCreate, ThreadResponse
-from app.services.auth import get_current_agent
+from app.services.auth import get_current_agent, optional_auth
 from app.services.membership import check_membership
 
 router = APIRouter(prefix="/workspaces/{workspace_id}/threads", tags=["threads"])
@@ -53,6 +53,7 @@ async def list_threads(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
+    _auth=Depends(optional_auth),
 ):
     query = select(Thread).where(Thread.workspace_id == workspace_id)
     if work_item_id:
@@ -62,7 +63,7 @@ async def list_threads(
 
 
 @router.get("/{thread_id}", response_model=ThreadResponse)
-async def get_thread(workspace_id: UUID, thread_id: UUID, db: AsyncSession = Depends(get_db)):
+async def get_thread(workspace_id: UUID, thread_id: UUID, db: AsyncSession = Depends(get_db), _auth=Depends(optional_auth)):
     result = await db.execute(
         select(Thread).where(Thread.id == thread_id, Thread.workspace_id == workspace_id)
     )
