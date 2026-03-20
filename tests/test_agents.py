@@ -98,7 +98,7 @@ async def test_regenerate_key_requires_admin(client, registered_agent):
 async def test_regenerate_key_no_auth(client, registered_agent):
     agent_id = registered_agent["id"]
     resp = await client.post(f"/agents/{agent_id}/regenerate-key")
-    assert resp.status_code in (401, 403, 422)
+    assert resp.status_code == 403
 
 
 async def test_regenerate_key_not_found(client, admin_headers):
@@ -126,4 +126,4 @@ async def test_regenerate_key_success(client, registered_agent, admin_headers):
 async def test_set_webhook_requires_auth(client, registered_agent):
     agent_id = registered_agent["id"]
     resp = await client.put(f"/agents/{agent_id}/webhook", json={"webhook_url": "http://example.com"})
-    assert resp.status_code in (401, 403, 422)
+    assert resp.status_code == 403

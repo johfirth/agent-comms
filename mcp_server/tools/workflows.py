@@ -36,6 +36,20 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
         # tool modules accept per-request api_key.
         client.api_key = api_key
 
+    def _no_active_agent_error() -> dict:
+        return {"status": "error", "message": "No active agent. Run setup_my_agent first."}
+
+    def _get_active_agent() -> tuple[str, dict] | None:
+        active_api_key = _active_api_key.get()
+        if not active_api_key:
+            return None
+
+        for agent_name, info in _key_store.list_agents().items():
+            if info["api_key"] == active_api_key:
+                return agent_name, info
+
+        return None
+
     @mcp.tool()
     async def setup_my_agent(
         name: Annotated[str, "Agent name for @mentions (e.g. 'john', 'alice-dev'). Lowercase, no spaces."],
@@ -182,8 +196,14 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
 
         After this, you can create threads and post messages in the workspace.
         """
+        active_agent = _get_active_agent()
+        if not active_agent:
+            return _no_active_agent_error()
+        _, active_agent_info = active_agent
+        active_api_key = active_agent_info["api_key"]
+
         # Find existing workspace
-        workspaces = await client.get("/workspaces", api_key=_active_api_key.get())
+        workspaces = await client.get("/workspaces", api_key=active_api_key)
         workspace = None
         for ws in workspaces:
             if ws["name"] == workspace_name:
@@ -202,20 +222,14 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
 
         # Try to join (might already be a member)
         try:
-            await client.post(f"/workspaces/{ws_id}/join", api_key=_active_api_key.get())
+            await client.post(f"/workspaces/{ws_id}/join", api_key=active_api_key)
         except AgentCommsError as exc:
             if exc.status_code != 409:
                 raise
             # 409 = already a member, safe to ignore
 
         # Auto-approve (admin)
-        # Need to figure out our agent ID from the key store
-        all_agents = _key_store.list_agents()
-        agent_id = None
-        for name, info in all_agents.items():
-            if info["api_key"] == _active_api_key.get():
-                agent_id = info["id"]
-                break
+        agent_id = active_agent_info["id"]
 
         if agent_id:
             try:
@@ -249,10 +263,15 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
         Returns messages with author names, content, and timestamps in
         chronological order.
         """
+        active_agent = _get_active_agent()
+        if not active_agent:
+            return _no_active_agent_error()
+        _, active_agent_info = active_agent
+
         messages = await client.get(
             f"/threads/{thread_id}/messages",
             params={"limit": max(1, min(limit, 200))},
-            api_key=_active_api_key.get(),
+            api_key=active_agent_info["api_key"],
         )
 
         formatted = []
@@ -286,8 +305,14 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
 
         After this, other agents can read_conversation and respond.
         """
+        active_agent = _get_active_agent()
+        if not active_agent:
+            return _no_active_agent_error()
+        _, active_agent_info = active_agent
+        active_api_key = active_agent_info["api_key"]
+
         # Find workspace
-        workspaces = await client.get("/workspaces", api_key=_active_api_key.get())
+        workspaces = await client.get("/workspaces", api_key=active_api_key)
         workspace = None
         for ws in workspaces:
             if ws["name"] == workspace_name:
@@ -303,13 +328,13 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
         body = {"title": thread_title}
         if thread_description:
             body["description"] = thread_description
-        thread = await client.post(f"/workspaces/{ws_id}/threads", json=body, api_key=_active_api_key.get())
+        thread = await client.post(f"/workspaces/{ws_id}/threads", json=body, api_key=active_api_key)
 
         # Post first message
         message = await client.post(
             f"/threads/{thread['id']}/messages",
             json={"content": first_message},
-            api_key=_active_api_key.get(),
+            api_key=active_api_key,
         )
 
         return {
@@ -329,29 +354,23 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
         Returns all mentions of your agent, optionally filtered by workspace.
         Use this to find conversations where your input is needed.
         """
-        # Find our agent ID
-        all_agents = _key_store.list_agents()
-        agent_id = None
-        agent_name = None
-        for name, info in all_agents.items():
-            if info["api_key"] == _active_api_key.get():
-                agent_id = info["id"]
-                agent_name = name
-                break
-
-        if not agent_id:
-            return {"status": "error", "message": "No active agent. Run setup_my_agent first."}
+        active_agent = _get_active_agent()
+        if not active_agent:
+            return _no_active_agent_error()
+        agent_name, active_agent_info = active_agent
+        agent_id = active_agent_info["id"]
+        active_api_key = active_agent_info["api_key"]
 
         params = {"agent_id": agent_id}
 
         if workspace_name:
-            workspaces = await client.get("/workspaces", api_key=_active_api_key.get())
+            workspaces = await client.get("/workspaces", api_key=active_api_key)
             for ws in workspaces:
                 if ws["name"] == workspace_name:
                     params["workspace_id"] = ws["id"]
                     break
 
-        mentions = await client.get("/mentions", params=params, api_key=_active_api_key.get())
+        mentions = await client.get("/mentions", params=params, api_key=active_api_key)
 
         return {
             "agent": agent_name,
@@ -369,7 +388,13 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
         Returns thread titles, IDs, and message counts so you can find
         conversations to join or continue.
         """
-        workspaces = await client.get("/workspaces", api_key=_active_api_key.get())
+        active_agent = _get_active_agent()
+        if not active_agent:
+            return _no_active_agent_error()
+        _, active_agent_info = active_agent
+        active_api_key = active_agent_info["api_key"]
+
+        workspaces = await client.get("/workspaces", api_key=active_api_key)
         workspace = None
         for ws in workspaces:
             if ws["name"] == workspace_name:
@@ -379,7 +404,7 @@ def register_workflow_tools(mcp: FastMCP, client: AgentCommsClient):
         if not workspace:
             return {"status": "error", "message": f"Workspace '{workspace_name}' not found."}
 
-        threads = await client.get(f"/workspaces/{workspace['id']}/threads", api_key=_active_api_key.get())
+        threads = await client.get(f"/workspaces/{workspace['id']}/threads", api_key=active_api_key)
 
         return {
             "workspace": workspace_name,

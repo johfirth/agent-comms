@@ -274,7 +274,7 @@ async def test_create_work_item_no_auth(client, approved_agent):
         f"/workspaces/{wid}/work-items",
         json={"type": "epic", "title": "No Auth Epic"},
     )
-    assert resp.status_code in (401, 403, 422)
+    assert resp.status_code == 403
 
 
 async def test_create_work_item_invalid_key(client, approved_agent):

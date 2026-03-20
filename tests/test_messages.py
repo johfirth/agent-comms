@@ -127,7 +127,7 @@ async def test_post_message_no_auth(client, approved_agent):
     tid = thread_resp.json()["id"]
 
     resp = await client.post(f"/threads/{tid}/messages", json={"content": "no auth"})
-    assert resp.status_code in (401, 403, 422)
+    assert resp.status_code == 403
 
 
 async def test_post_message_invalid_key(client, approved_agent):

@@ -1,3 +1,4 @@
+import asyncio
 import ipaddress
 import logging
 import socket
@@ -62,20 +63,33 @@ async def dispatch_mention_webhooks(
     )
     agents = result.scalars().all()
 
+    safe_agents: list[tuple[str, str]] = []
+    for agent in agents:
+        webhook_url = agent.webhook_url
+        if not webhook_url:
+            continue
+        if not _is_safe_url(webhook_url):
+            logger.warning(
+                "Blocked SSRF attempt: agent %s webhook %s targets internal network",
+                agent.name,
+                webhook_url,
+            )
+            continue
+        safe_agents.append((agent.name, webhook_url))
+
+    if not safe_agents:
+        return
+
     async with httpx.AsyncClient(timeout=10.0) as client:
-        for agent in agents:
-            if not _is_safe_url(agent.webhook_url):
-                logger.warning(
-                    "Blocked SSRF attempt: agent %s webhook %s targets internal network",
-                    agent.name,
-                    agent.webhook_url,
-                )
-                continue
-            try:
-                await client.post(agent.webhook_url, json=payload)
-            except Exception:
-                logger.warning(
-                    "Webhook delivery failed for agent %s at %s",
-                    agent.name,
-                    agent.webhook_url,
-                )
+        responses = await asyncio.gather(
+            *(client.post(webhook_url, json=payload) for _, webhook_url in safe_agents),
+            return_exceptions=True,
+        )
+
+    for (agent_name, webhook_url), response in zip(safe_agents, responses):
+        if isinstance(response, Exception):
+            logger.warning(
+                "Webhook delivery failed for agent %s at %s",
+                agent_name,
+                webhook_url,
+            )

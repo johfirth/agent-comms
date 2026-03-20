@@ -32,7 +32,7 @@ async def test_join_workspace_duplicate(client, registered_agent, workspace):
 async def test_join_workspace_no_auth(client, workspace):
     """Joining without auth should fail."""
     resp = await client.post(f"/workspaces/{workspace['id']}/join")
-    assert resp.status_code in (401, 403, 422)
+    assert resp.status_code == 403
 
 
 async def test_join_nonexistent_workspace(client, registered_agent):

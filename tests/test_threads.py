@@ -59,7 +59,7 @@ async def test_create_thread_no_auth(client, workspace):
         f"/workspaces/{workspace['id']}/threads",
         json={"title": "no auth"},
     )
-    assert resp.status_code in (401, 403, 422)
+    assert resp.status_code == 403
 
 
 async def test_create_thread_invalid_key(client, workspace):

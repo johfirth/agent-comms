@@ -63,12 +63,17 @@ def _admin_headers():
 
 def _find_workspace(name):
     """Find a workspace by name, return its ID."""
-    r = httpx.get(f"{BASE_URL}/workspaces", timeout=10)
-    r.raise_for_status()
-    for ws in r.json():
-        if ws["name"] == name:
-            return ws
-    _err(f"Workspace '{name}' not found")
+    try:
+        r = httpx.get(f"{BASE_URL}/workspaces", timeout=10)
+        r.raise_for_status()
+        for ws in r.json():
+            if ws["name"] == name:
+                return ws
+        _err(f"Workspace '{name}' not found")
+    except httpx.ConnectError:
+        _err(f"Cannot connect to agent-comms server at {BASE_URL}")
+    except httpx.HTTPStatusError as e:
+        _err(f"HTTP {e.response.status_code}: {e.response.text}")
 
 
 # ── Commands ──────────────────────────────────────────────────────────
