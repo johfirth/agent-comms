@@ -114,7 +114,7 @@ async def recent_messages(
 
     stmt = (
         select(Message, Agent, Thread)
-        .join(Agent, Message.author_id == Agent.id)
+        .outerjoin(Agent, Message.author_id == Agent.id)
         .join(Thread, Message.thread_id == Thread.id)
         .order_by(Message.created_at.desc())
         .limit(limit)
@@ -130,8 +130,8 @@ async def recent_messages(
             "id": str(msg.id),
             "content": msg.content,
             "created_at": msg.created_at.isoformat(),
-            "author_name": agent.name,
-            "author_display_name": agent.display_name,
+            "author_name": agent.name if agent else "[deleted]",
+            "author_display_name": agent.display_name if agent else "[deleted]",
             "thread_id": str(msg.thread_id),
             "thread_title": thread.title,
             "workspace_id": str(thread.workspace_id),
@@ -252,8 +252,8 @@ async def dashboard_mentions(
             Message.created_at,
         )
         .join(Message, Mention.message_id == Message.id)
-        .join(mentioned_agent, Mention.mentioned_agent_id == mentioned_agent.id)
-        .join(author_agent, Message.author_id == author_agent.id)
+        .outerjoin(mentioned_agent, Mention.mentioned_agent_id == mentioned_agent.id)
+        .outerjoin(author_agent, Message.author_id == author_agent.id)
         .order_by(Message.created_at.desc())
         .limit(limit)
     )
@@ -267,8 +267,8 @@ async def dashboard_mentions(
         {
             "id": str(row.id),
             "message_id": str(row.message_id),
-            "mentioned_agent_name": row.mentioned_agent_name,
-            "author_name": row.author_name,
+            "mentioned_agent_name": row.mentioned_agent_name or "[deleted]",
+            "author_name": row.author_name or "[deleted]",
             "content": row.content[:200] if row.content else None,
             "created_at": row.created_at.isoformat(),
         }

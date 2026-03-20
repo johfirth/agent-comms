@@ -14,8 +14,8 @@ class Message(Base):
     thread_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("threads.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    author_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False, index=True
+    author_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("agents.id", ondelete="SET NULL"), nullable=True, index=True
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)

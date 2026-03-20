@@ -45,7 +45,7 @@ async def create_message(
     
     # Fire webhooks for mentioned agents (fire-and-forget)
     if mentions:
-        mentioned_ids = [m.mentioned_agent_id for m in mentions]
+        mentioned_ids = [m.mentioned_agent_id for m in mentions if m.mentioned_agent_id is not None]
         await dispatch_mention_webhooks(
             db,
             mentioned_ids,
@@ -82,7 +82,7 @@ async def list_messages(
     await _get_thread(thread_id, db)
     result = await db.execute(
         select(Message, Agent.name)
-        .join(Agent, Message.author_id == Agent.id)
+        .outerjoin(Agent, Message.author_id == Agent.id)
         .where(Message.thread_id == thread_id)
         .order_by(Message.created_at.asc(), Message.id.asc())
         .limit(limit)
@@ -94,7 +94,7 @@ async def list_messages(
             id=msg.id,
             thread_id=msg.thread_id,
             author_id=msg.author_id,
-            author_name=name,
+            author_name=name or "[deleted]",
             content=msg.content,
             created_at=msg.created_at,
             updated_at=msg.updated_at,

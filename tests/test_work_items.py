@@ -437,6 +437,183 @@ async def test_assign_nonexistent_agent(client, approved_agent):
     assert resp.status_code == 404
 
 
+async def test_create_work_item_assign_approved_member(client, approved_agent, admin_headers):
+    """Assigning to an approved member in the same workspace should succeed."""
+    wid = approved_agent["workspace_id"]
+    headers = approved_agent["headers"]
+
+    assignee_name = f"assignee-{uuid.uuid4().hex[:8]}"
+    reg = await client.post("/agents", json={"name": assignee_name, "display_name": f"Assignee {assignee_name}"})
+    assert reg.status_code == 201
+    assignee = reg.json()
+    assignee_headers = {"X-API-Key": assignee["api_key"]}
+
+    join_resp = await client.post(f"/workspaces/{wid}/join", headers=assignee_headers)
+    assert join_resp.status_code == 201
+    approve_resp = await client.patch(
+        f"/workspaces/{wid}/members/{assignee['id']}",
+        json={"status": "approved", "approved_by": "admin"},
+        headers=admin_headers,
+    )
+    assert approve_resp.status_code == 200
+
+    resp = await client.post(
+        f"/workspaces/{wid}/work-items",
+        json={"type": "epic", "title": "Assigned Epic", "assigned_agent_id": assignee["id"]},
+        headers=headers,
+    )
+    assert resp.status_code == 201
+    assert resp.json()["assigned_agent_id"] == assignee["id"]
+
+
+async def test_create_work_item_assign_non_member_rejected(client, approved_agent):
+    """Assigning to an existing agent outside the workspace should fail."""
+    wid = approved_agent["workspace_id"]
+    headers = approved_agent["headers"]
+
+    outsider_name = f"outsider-{uuid.uuid4().hex[:8]}"
+    reg = await client.post("/agents", json={"name": outsider_name, "display_name": f"Outsider {outsider_name}"})
+    assert reg.status_code == 201
+    outsider = reg.json()
+
+    resp = await client.post(
+        f"/workspaces/{wid}/work-items",
+        json={"type": "epic", "title": "Cross Workspace", "assigned_agent_id": outsider["id"]},
+        headers=headers,
+    )
+    assert resp.status_code == 403
+    assert "approved member" in resp.json()["detail"].lower()
+
+
+async def test_create_work_item_assign_pending_member_rejected(client, approved_agent):
+    """Assigning to a pending (not approved) member should fail."""
+    wid = approved_agent["workspace_id"]
+    headers = approved_agent["headers"]
+
+    pending_name = f"pending-{uuid.uuid4().hex[:8]}"
+    reg = await client.post("/agents", json={"name": pending_name, "display_name": f"Pending {pending_name}"})
+    assert reg.status_code == 201
+    pending = reg.json()
+    pending_headers = {"X-API-Key": pending["api_key"]}
+
+    join_resp = await client.post(f"/workspaces/{wid}/join", headers=pending_headers)
+    assert join_resp.status_code == 201
+
+    resp = await client.post(
+        f"/workspaces/{wid}/work-items",
+        json={"type": "epic", "title": "Pending Assignee", "assigned_agent_id": pending["id"]},
+        headers=headers,
+    )
+    assert resp.status_code == 403
+    assert "approved member" in resp.json()["detail"].lower()
+
+
+async def test_update_work_item_assign_nonexistent_agent(client, approved_agent):
+    """Updating assignment to a nonexistent agent should fail."""
+    wid = approved_agent["workspace_id"]
+    headers = approved_agent["headers"]
+    epic = await client.post(
+        f"/workspaces/{wid}/work-items",
+        json={"type": "epic", "title": "Reassign Me"},
+        headers=headers,
+    )
+    assert epic.status_code == 201
+
+    resp = await client.patch(
+        f"/workspaces/{wid}/work-items/{epic.json()['id']}",
+        json={"assigned_agent_id": str(uuid.uuid4())},
+        headers=headers,
+    )
+    assert resp.status_code == 404
+
+
+async def test_update_work_item_assign_approved_member(client, approved_agent, admin_headers):
+    """Updating assignment to an approved member in the same workspace should succeed."""
+    wid = approved_agent["workspace_id"]
+    headers = approved_agent["headers"]
+    epic = await client.post(
+        f"/workspaces/{wid}/work-items",
+        json={"type": "epic", "title": "Update Assignment"},
+        headers=headers,
+    )
+    assert epic.status_code == 201
+
+    assignee_name = f"up-assignee-{uuid.uuid4().hex[:8]}"
+    reg = await client.post("/agents", json={"name": assignee_name, "display_name": f"Assignee {assignee_name}"})
+    assert reg.status_code == 201
+    assignee = reg.json()
+    assignee_headers = {"X-API-Key": assignee["api_key"]}
+    join_resp = await client.post(f"/workspaces/{wid}/join", headers=assignee_headers)
+    assert join_resp.status_code == 201
+    approve_resp = await client.patch(
+        f"/workspaces/{wid}/members/{assignee['id']}",
+        json={"status": "approved", "approved_by": "admin"},
+        headers=admin_headers,
+    )
+    assert approve_resp.status_code == 200
+
+    resp = await client.patch(
+        f"/workspaces/{wid}/work-items/{epic.json()['id']}",
+        json={"assigned_agent_id": assignee["id"]},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["assigned_agent_id"] == assignee["id"]
+
+
+async def test_update_work_item_assign_non_member_rejected(client, approved_agent):
+    """Updating assignment to a non-member should fail."""
+    wid = approved_agent["workspace_id"]
+    headers = approved_agent["headers"]
+    epic = await client.post(
+        f"/workspaces/{wid}/work-items",
+        json={"type": "epic", "title": "Update Non Member"},
+        headers=headers,
+    )
+    assert epic.status_code == 201
+
+    outsider_name = f"up-outsider-{uuid.uuid4().hex[:8]}"
+    reg = await client.post("/agents", json={"name": outsider_name, "display_name": f"Outsider {outsider_name}"})
+    assert reg.status_code == 201
+    outsider = reg.json()
+
+    resp = await client.patch(
+        f"/workspaces/{wid}/work-items/{epic.json()['id']}",
+        json={"assigned_agent_id": outsider["id"]},
+        headers=headers,
+    )
+    assert resp.status_code == 403
+    assert "approved member" in resp.json()["detail"].lower()
+
+
+async def test_update_work_item_assign_pending_member_rejected(client, approved_agent):
+    """Updating assignment to a pending member should fail."""
+    wid = approved_agent["workspace_id"]
+    headers = approved_agent["headers"]
+    epic = await client.post(
+        f"/workspaces/{wid}/work-items",
+        json={"type": "epic", "title": "Update Pending"},
+        headers=headers,
+    )
+    assert epic.status_code == 201
+
+    pending_name = f"up-pending-{uuid.uuid4().hex[:8]}"
+    reg = await client.post("/agents", json={"name": pending_name, "display_name": f"Pending {pending_name}"})
+    assert reg.status_code == 201
+    pending = reg.json()
+    pending_headers = {"X-API-Key": pending["api_key"]}
+    join_resp = await client.post(f"/workspaces/{wid}/join", headers=pending_headers)
+    assert join_resp.status_code == 201
+
+    resp = await client.patch(
+        f"/workspaces/{wid}/work-items/{epic.json()['id']}",
+        json={"assigned_agent_id": pending["id"]},
+        headers=headers,
+    )
+    assert resp.status_code == 403
+    assert "approved member" in resp.json()["detail"].lower()
+
+
 # --- Pagination / Filtering ---
 
 

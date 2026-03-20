@@ -3,6 +3,7 @@ from typing import AsyncGenerator
 
 import httpx
 import pytest_asyncio
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
@@ -15,6 +16,13 @@ TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 engine = create_async_engine(TEST_DATABASE_URL, echo=False)
 test_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+
+@event.listens_for(engine.sync_engine, "connect")
+def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -45,6 +53,12 @@ async def client() -> AsyncGenerator[httpx.AsyncClient, None]:
 @pytest_asyncio.fixture
 async def admin_headers() -> dict:
     return {"X-API-Key": ADMIN_KEY}
+
+
+@pytest_asyncio.fixture
+async def db_session() -> AsyncGenerator[AsyncSession, None]:
+    async with test_session() as session:
+        yield session
 
 
 @pytest_asyncio.fixture

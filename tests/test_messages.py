@@ -1,4 +1,8 @@
 import uuid
+from sqlalchemy import delete, select
+
+from app.models.agent import Agent
+from app.models.message import Message
 
 
 async def test_post_message(client, approved_agent):
@@ -34,6 +38,43 @@ async def test_list_messages(client, approved_agent):
     resp = await client.get(f"/threads/{tid}/messages", headers=headers)
     assert resp.status_code == 200
     assert len(resp.json()) == 3
+
+
+async def test_list_messages_preserves_deleted_author_history(client, approved_agent, db_session):
+    wid = approved_agent["workspace_id"]
+    headers = approved_agent["headers"]
+
+    thread_resp = await client.post(
+        f"/workspaces/{wid}/threads", json={"title": "deleted author thread"}, headers=headers
+    )
+    tid = thread_resp.json()["id"]
+
+    message_resp = await client.post(
+        f"/threads/{tid}/messages",
+        json={"content": "message from deleted author"},
+        headers=headers,
+    )
+    message_id = message_resp.json()["id"]
+
+    await db_session.execute(
+        delete(Agent).where(Agent.id == uuid.UUID(approved_agent["id"]))
+    )
+    await db_session.commit()
+
+    persisted = await db_session.execute(
+        select(Message).where(Message.id == uuid.UUID(message_id))
+    )
+    message = persisted.scalar_one_or_none()
+    assert message is not None
+    assert message.author_id is None
+
+    resp = await client.get(f"/threads/{tid}/messages")
+    assert resp.status_code == 200
+    messages = resp.json()
+    assert len(messages) == 1
+    assert messages[0]["id"] == message_id
+    assert messages[0]["author_id"] is None
+    assert messages[0]["author_name"] == "[deleted]"
 
 
 async def test_message_with_mention(client, approved_agent, admin_headers):

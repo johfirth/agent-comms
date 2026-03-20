@@ -13,8 +13,8 @@ class Mention(Base):
     message_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    mentioned_agent_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False, index=True
+    mentioned_agent_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("agents.id", ondelete="SET NULL"), nullable=True, index=True
     )
     workspace_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True

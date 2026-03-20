@@ -1,4 +1,8 @@
 import pytest
+import uuid
+from sqlalchemy import delete
+
+from app.models.agent import Agent
 
 
 # --- GET /api/dashboard/overview ---
@@ -67,6 +71,35 @@ async def test_dashboard_recent_messages_workspace_filter(client, approved_agent
     assert resp.status_code == 200
 
 
+async def test_dashboard_recent_messages_deleted_author_fallback(client, approved_agent, db_session):
+    wid = approved_agent["workspace_id"]
+    headers = approved_agent["headers"]
+    thread_resp = await client.post(
+        f"/workspaces/{wid}/threads",
+        json={"title": "Dashboard deleted author"},
+        headers=headers,
+    )
+    tid = thread_resp.json()["id"]
+    await client.post(
+        f"/threads/{tid}/messages",
+        json={"content": "author should be deleted"},
+        headers=headers,
+    )
+
+    await db_session.execute(
+        delete(Agent).where(Agent.id == uuid.UUID(approved_agent["id"]))
+    )
+    await db_session.commit()
+
+    resp = await client.get(f"/api/dashboard/recent-messages?workspace_id={wid}")
+    assert resp.status_code == 200
+    msgs = resp.json()
+    assert len(msgs) == 1
+    assert msgs[0]["content"] == "author should be deleted"
+    assert msgs[0]["author_name"] == "[deleted]"
+    assert msgs[0]["author_display_name"] == "[deleted]"
+
+
 # --- GET /api/dashboard/threads ---
 
 
@@ -112,6 +145,49 @@ async def test_dashboard_mentions_empty(client):
     resp = await client.get("/api/dashboard/mentions")
     assert resp.status_code == 200
     assert resp.json() == []
+
+
+async def test_dashboard_mentions_deleted_agents_fallback(client, approved_agent, admin_headers, db_session):
+    wid = approved_agent["workspace_id"]
+    author_headers = approved_agent["headers"]
+
+    target_name = f"dash-target-{uuid.uuid4().hex[:8]}"
+    reg_resp = await client.post(
+        "/agents", json={"name": target_name, "display_name": f"Agent {target_name}"}
+    )
+    target = reg_resp.json()
+    target_headers = {"X-API-Key": target["api_key"]}
+
+    await client.post(f"/workspaces/{wid}/join", headers=target_headers)
+    await client.patch(
+        f"/workspaces/{wid}/members/{target['id']}",
+        json={"status": "approved", "approved_by": "admin"},
+        headers=admin_headers,
+    )
+
+    thread_resp = await client.post(
+        f"/workspaces/{wid}/threads",
+        json={"title": "Dashboard mention deleted"},
+        headers=author_headers,
+    )
+    tid = thread_resp.json()["id"]
+    await client.post(
+        f"/threads/{tid}/messages",
+        json={"content": f"hey @{target_name}"},
+        headers=author_headers,
+    )
+
+    await db_session.execute(
+        delete(Agent).where(Agent.id.in_([uuid.UUID(approved_agent["id"]), uuid.UUID(target["id"])]))
+    )
+    await db_session.commit()
+
+    resp = await client.get(f"/api/dashboard/mentions?workspace_id={wid}")
+    assert resp.status_code == 200
+    mentions = resp.json()
+    assert len(mentions) >= 1
+    assert mentions[0]["mentioned_agent_name"] == "[deleted]"
+    assert mentions[0]["author_name"] == "[deleted]"
 
 
 # --- GET /dashboard (HTML page) ---

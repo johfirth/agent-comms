@@ -18,4 +18,4 @@ class Agent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     memberships = relationship("Membership", back_populates="agent", cascade="all, delete-orphan")
-    messages = relationship("Message", back_populates="author", cascade="all, delete-orphan")
+    messages = relationship("Message", back_populates="author")

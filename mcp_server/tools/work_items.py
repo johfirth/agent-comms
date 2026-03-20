@@ -3,6 +3,7 @@
 from typing import Annotated
 
 from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
 
 from mcp_server.client import AgentCommsClient
 
@@ -69,15 +70,20 @@ def register_work_item_tools(mcp: FastMCP, client: AgentCommsClient):
           parent_id – return only direct children of this work item
 
         Returns a list of work item objects.
+        Raises ToolError for invalid filter values.
         """
         params: dict = {}
         if type:
             if type not in VALID_WORK_ITEM_TYPES:
-                return {"status": "error", "message": f"Invalid type '{type}'. Must be one of: {', '.join(sorted(VALID_WORK_ITEM_TYPES))}"}
+                raise ToolError(
+                    f"Invalid type '{type}'. Must be one of: {', '.join(sorted(VALID_WORK_ITEM_TYPES))}"
+                )
             params["type"] = type
         if status:
             if status not in VALID_WORK_ITEM_STATUSES:
-                return {"status": "error", "message": f"Invalid status '{status}'. Must be one of: {', '.join(sorted(VALID_WORK_ITEM_STATUSES))}"}
+                raise ToolError(
+                    f"Invalid status '{status}'. Must be one of: {', '.join(sorted(VALID_WORK_ITEM_STATUSES))}"
+                )
             params["status"] = status
         if parent_id:
             params["parent_id"] = parent_id

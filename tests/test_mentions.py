@@ -1,4 +1,8 @@
 import uuid
+from sqlalchemy import delete, select
+
+from app.models.agent import Agent
+from app.models.mention import Mention
 
 
 async def test_search_mentions_empty(client, registered_agent):
@@ -113,3 +117,65 @@ async def test_search_mentions_pagination(client, approved_agent, admin_headers)
     resp2 = await client.get(f"/mentions?agent_id={target['id']}&limit=1&offset=1")
     assert resp2.status_code == 200
     assert len(resp2.json()) == 1
+
+
+async def test_mentions_preserved_when_mentioned_agent_deleted(client, approved_agent, admin_headers, db_session):
+    wid = approved_agent["workspace_id"]
+    headers = approved_agent["headers"]
+
+    target_name = f"deleted-target-{uuid.uuid4().hex[:8]}"
+    reg_resp = await client.post("/agents", json={"name": target_name, "display_name": f"Agent {target_name}"})
+    target = reg_resp.json()
+    target_headers = {"X-API-Key": target["api_key"]}
+
+    await client.post(f"/workspaces/{wid}/join", headers=target_headers)
+    await client.patch(
+        f"/workspaces/{wid}/members/{target['id']}",
+        json={"status": "approved", "approved_by": "admin"},
+        headers=admin_headers,
+    )
+
+    thread_resp = await client.post(
+        f"/workspaces/{wid}/threads", json={"title": "mention deletion"}, headers=headers
+    )
+    tid = thread_resp.json()["id"]
+
+    await client.post(
+        f"/threads/{tid}/messages",
+        json={"content": f"hello @{target_name}"},
+        headers=headers,
+    )
+
+    before_delete = await client.get(f"/mentions?agent_id={target['id']}", headers=target_headers)
+    assert before_delete.status_code == 200
+    assert len(before_delete.json()) >= 1
+    mention_id = before_delete.json()[0]["id"]
+
+    await db_session.execute(delete(Agent).where(Agent.id == uuid.UUID(target["id"])))
+    await db_session.commit()
+
+    persisted = await db_session.execute(
+        select(Mention).where(Mention.id == uuid.UUID(mention_id))
+    )
+    mention = persisted.scalar_one_or_none()
+    assert mention is not None
+    assert mention.mentioned_agent_id is None
+
+    # Mentions search for deleted agent remains safe (returns no matches)
+    after_delete = await client.get(
+        f"/mentions?agent_id={target['id']}",
+        headers=headers,
+    )
+    assert after_delete.status_code == 200
+    assert after_delete.json() == []
+
+    # Dashboard mentions still render preserved mention with fallback identity
+    dashboard_resp = await client.get(
+        f"/api/dashboard/mentions?workspace_id={wid}",
+        headers=headers,
+    )
+    assert dashboard_resp.status_code == 200
+    dashboard_mentions = dashboard_resp.json()
+    assert len(dashboard_mentions) >= 1
+    assert dashboard_mentions[0]["id"] == mention_id
+    assert dashboard_mentions[0]["mentioned_agent_name"] == "[deleted]"

@@ -10,7 +10,7 @@ class MessageCreate(BaseModel):
 class MessageResponse(BaseModel):
     id: UUID
     thread_id: UUID
-    author_id: UUID
+    author_id: UUID | None
     author_name: str | None = None
     content: str
     created_at: datetime

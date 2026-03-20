@@ -40,13 +40,14 @@ async def _validate_hierarchy(db: AsyncSession, item_type: str, parent_id: UUID 
         )
 
 
-async def _validate_assigned_agent(db: AsyncSession, agent_id: UUID | None) -> None:
-    """Verify the assigned agent exists."""
+async def _validate_assigned_agent(db: AsyncSession, workspace_id: UUID, agent_id: UUID | None) -> None:
+    """Verify the assigned agent exists and is an approved workspace member."""
     if agent_id is None:
         return
     result = await db.execute(select(Agent).where(Agent.id == agent_id))
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Assigned agent not found")
+    await check_membership(db, workspace_id, agent_id)
 
 
 @router.post("", response_model=WorkItemResponse, status_code=201)
@@ -58,7 +59,7 @@ async def create_work_item(
 ):
     await check_membership(db, workspace_id, agent.id)
     await _validate_hierarchy(db, body.type, body.parent_id, workspace_id)
-    await _validate_assigned_agent(db, body.assigned_agent_id)
+    await _validate_assigned_agent(db, workspace_id, body.assigned_agent_id)
     
     work_item = WorkItem(
         workspace_id=workspace_id,
@@ -125,7 +126,7 @@ async def update_work_item(
     
     update_data = body.model_dump(exclude_unset=True)
     if "assigned_agent_id" in update_data:
-        await _validate_assigned_agent(db, update_data["assigned_agent_id"])
+        await _validate_assigned_agent(db, workspace_id, update_data["assigned_agent_id"])
     if "status" in update_data:
         update_data["status"] = WorkItemStatus(update_data["status"])
     ALLOWED_FIELDS = {"title", "description", "status", "assigned_agent_id"}
